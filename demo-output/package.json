@@ -1,0 +1,14 @@
+{
+  "name": "generated-models",
+  "version": "1.0.0",
+  "description": "Generated TypeScript models",
+  "main": "models/index.js",
+  "types": "models/index.d.ts",
+  "type": "module",
+  "dependencies": {
+    "class-transformer": "^0.5.1",
+    "reflect-metadata": "^0.2.2",
+    "@nestjs/swagger": "^7.0.0",
+    "class-validator": "^0.14.0"
+  }
+}

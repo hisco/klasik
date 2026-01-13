@@ -1,0 +1,33 @@
+/**
+ * {{description}}
+ {{#isGenerated}}
+ * @generated
+ {{/isGenerated}}
+ */
+export class {{className}} {
+{{#properties}}
+  /**
+   * {{description}}
+   {{#required}}@required{{/required}}
+   {{#format}}@format {{format}}{{/format}}
+   */
+  {{name}}{{^required}}?{{/required}}: {{type}};
+
+{{/properties}}
+  static readonly discriminator: string | undefined = undefined;
+
+  static readonly attributeTypeMap: Array<{name: string, baseName: string, type: string, format: string}> = [
+{{#properties}}
+    {
+      name: "{{name}}",
+      baseName: "{{baseName}}",
+      type: "{{type}}",
+      format: "{{format}}"
+    }{{^last}},{{/last}}
+{{/properties}}
+  ];
+
+  static getAttributeTypeMap() {
+    return {{className}}.attributeTypeMap;
+  }
+}

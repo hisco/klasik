@@ -1,0 +1,19 @@
+{
+  "allowedCommands": {
+    "npm": {
+      "allow": true,
+      "description": "Allow all npm commands in this project"
+    }
+  },
+  "allowedPaths": {
+    ".": {
+      "read": true,
+      "write": true,
+      "description": "Allow all file read and write operations in this project"
+    },
+    "../klasik": {
+      "read": true,
+      "description": "Allow reading files from the klasik folder"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+# Source code (only ship compiled dist/)
+src/
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/
+
+# Build artifacts not needed for runtime
+tsconfig.json
+jest.config.js
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Test outputs
+test-output/
+test-output-crd/
+demo-generated/
+
+# Development dependencies
+node_modules/
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# IDE and tooling
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+.tmp/

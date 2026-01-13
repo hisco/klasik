@@ -1,0 +1,230 @@
+/**
+ * Configuration parameters for API clients
+ */
+export interface ConfigurationParameters {
+  /**
+   * Base URL for API requests
+   *
+   * @type {string}
+   * @example 'https://api.example.com'
+   */
+  basePath?: string;
+
+  /**
+   * Custom HTTP headers to include in all requests
+   *
+   * These headers will be merged with request-specific headers.
+   *
+   * @type {{ [key: string]: string }}
+   * @example { 'Authorization': 'Bearer token123', 'X-API-Key': 'abc123' }
+   */
+  headers?: { [key: string]: string };
+
+  /**
+   * Request timeout in milliseconds
+   *
+   * @type {number}
+   * @default 30000
+   * @example 5000
+   */
+  timeout?: number;
+
+  /**
+   * Enable automatic response transformation using plainToInstance
+   *
+   * When enabled (default), successful API responses are automatically
+   * transformed to class instances with proper decorators applied (@Type, @Expose, etc.).
+   * This enables runtime type checking and nested object transformation.
+   *
+   * Set to false if you prefer to work with plain JavaScript objects.
+   *
+   * @type {boolean}
+   * @default true
+   */
+  enableResponseTransformation?: boolean;
+
+  /**
+   * Callback invoked when response transformation fails
+   *
+   * Use this to implement custom error handling or logging when class-transformer
+   * fails to transform a response. If not provided, errors are logged to console
+   * and the original response data is returned.
+   *
+   * @callback onTransformationError
+   * @param {Error} error - The transformation error that occurred
+   * @param {any} modelClass - The target class for transformation
+   * @param {any} data - The original response data that failed to transform
+   * @example
+   * (error, modelClass, data) => {
+   *   console.error(`Failed to transform to ${modelClass.name}:`, error);
+   *   Sentry.captureException(error);
+   * }
+   */
+  onTransformationError?: (error: Error, modelClass: any, data: any) => void;
+
+  /**
+   * Enable automatic response validation using class-validator
+   *
+   * When enabled, API responses transformed to class instances are automatically
+   * validated using class-validator decorators (@IsString, @IsEmail, @Min, etc.).
+   * Validation only works if:
+   * 1. enableResponseTransformation is true (validation requires class instances)
+   * 2. Models were generated with the classValidator plugin enabled
+   *
+   * If validation fails, the onResponseValidationError callback is invoked (if provided),
+   * or a ValidationError is thrown by default.
+   *
+   * @type {boolean}
+   * @default false
+   */
+  enableResponseValidation?: boolean;
+
+  /**
+   * Callback invoked when response validation fails
+   *
+   * Use this to implement custom error handling or logging when class-validator
+   * detects validation errors. If not provided, a ValidationError is thrown.
+   *
+   * @callback onResponseValidationError
+   * @param {any[]} errors - Array of validation errors from class-validator
+   * @param {any} modelClass - The class that failed validation
+   * @param {any} instance - The class instance that failed validation
+   * @example
+   * (errors, modelClass, instance) => {
+   *   console.error(`Validation failed for ${modelClass.name}:`, errors);
+   *   Sentry.captureException(new Error('API response validation failed'));
+   * }
+   */
+  onResponseValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+
+  /**
+   * Enable automatic request validation using class-validator
+   *
+   * When enabled, request bodies are validated before being sent to the server:
+   * 1. Checks if request body is an instance of the expected class
+   * 2. Validates using class-validator decorators
+   *
+   * Validation only works if models were generated with the classValidator plugin enabled.
+   *
+   * If validation fails, the onRequestValidationError callback is invoked (if provided),
+   * or a ValidationError is thrown by default.
+   *
+   * @type {boolean}
+   * @default false
+   */
+  enableRequestValidation?: boolean;
+
+  /**
+   * Callback invoked when request validation fails
+   *
+   * Use this to implement custom error handling or logging when class-validator
+   * detects validation errors in request bodies. If not provided, a ValidationError is thrown.
+   *
+   * @callback onRequestValidationError
+   * @param {any[]} errors - Array of validation errors from class-validator
+   * @param {any} modelClass - The class that failed validation
+   * @param {any} instance - The request body instance that failed validation
+   * @example
+   * (errors, modelClass, instance) => {
+   *   console.error(`Request validation failed for ${modelClass.name}:`, errors);
+   *   // Fix the instance or log the error
+   * }
+   */
+  onRequestValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+}
+
+/**
+ * Configuration class for API clients
+ */
+export class Configuration {
+  /**
+   * Base URL for API requests
+   * @type {string}
+   */
+  basePath: string;
+
+  /**
+   * Custom HTTP headers included in all requests
+   * @type {{ [key: string]: string }}
+   */
+  headers: { [key: string]: string };
+
+  /**
+   * Request timeout in milliseconds
+   * @type {number}
+   */
+  timeout: number;
+
+  /**
+   * Enable automatic response transformation
+   * @type {boolean}
+   */
+  enableResponseTransformation: boolean;
+
+  /**
+   * Transformation error callback
+   * @type {((error: Error, modelClass: any, data: any) => void) | undefined}
+   */
+  onTransformationError?: (error: Error, modelClass: any, data: any) => void;
+
+  /**
+   * Enable automatic response validation
+   * @type {boolean}
+   */
+  enableResponseValidation: boolean;
+
+  /**
+   * Response validation error callback
+   * @type {((errors: any[], modelClass: any, instance: any) => void) | undefined}
+   */
+  onResponseValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+
+  /**
+   * Enable automatic request validation
+   * @type {boolean}
+   */
+  enableRequestValidation: boolean;
+
+  /**
+   * Request validation error callback
+   * @type {((errors: any[], modelClass: any, instance: any) => void) | undefined}
+   */
+  onRequestValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+
+  /**
+   * Create a new Configuration instance
+   *
+   * @constructor
+   * @param {ConfigurationParameters} params - Configuration parameters
+   * @param {string} params.basePath - Base URL for API requests (default: '')
+   * @param {{ [key: string]: string }} params.headers - Custom HTTP headers (default: {})
+   * @param {number} params.timeout - Request timeout in milliseconds (default: 30000)
+   * @param {boolean} params.enableResponseTransformation - Enable response transformation (default: true)
+   * @param {function} params.onTransformationError - Transformation error callback (default: undefined)
+   * @param {boolean} params.enableResponseValidation - Enable response validation (default: false)
+   * @param {function} params.onResponseValidationError - Response validation error callback (default: undefined)
+   * @param {boolean} params.enableRequestValidation - Enable request validation (default: false)
+   * @param {function} params.onRequestValidationError - Request validation error callback (default: undefined)
+   *
+   * @example
+   * const config = new Configuration({
+   *   basePath: 'https://api.example.com',
+   *   headers: { 'Authorization': 'Bearer token' },
+   *   timeout: 5000,
+   *   enableResponseTransformation: true,
+   *   enableResponseValidation: true,
+   *   enableRequestValidation: true
+   * });
+   */
+  constructor(params: ConfigurationParameters = {}) {
+    this.basePath = params.basePath || '';
+    this.headers = params.headers || {};
+    this.timeout = params.timeout || 30000;
+    this.enableResponseTransformation = params.enableResponseTransformation ?? true;
+    this.onTransformationError = params.onTransformationError;
+    this.enableResponseValidation = params.enableResponseValidation ?? false;
+    this.onResponseValidationError = params.onResponseValidationError;
+    this.enableRequestValidation = params.enableRequestValidation ?? false;
+    this.onRequestValidationError = params.onRequestValidationError;
+  }
+}

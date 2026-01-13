@@ -1,0 +1,86 @@
+import { AxiosInstance, AxiosResponse, RawAxiosRequestConfig } from 'axios';
+import { Configuration } from '../configuration';
+import { RequiredError } from '../base';
+{{#modelImports}}
+import { {{name}} } from '../models/{{fileName}}';
+{{/modelImports}}
+
+/**
+ * {{className}} - API class
+ * {{#description}}
+ * {{description}}
+ * {{/description}}
+ * @export
+ */
+export class {{className}} {
+  protected configuration: Configuration;
+  protected axios: AxiosInstance;
+
+  constructor(configuration: Configuration, axios: AxiosInstance) {
+    this.configuration = configuration;
+    this.axios = axios;
+  }
+
+{{#methods}}
+  /**
+   * {{summary}}
+   {{#description}}
+   * {{description}}
+   {{/description}}
+   * @param {{#parameters}}{{{type}}} {{name}} {{#description}}- {{description}}{{/description}}{{#hasMore}}, {{/hasMore}}{{/parameters}}
+   * @param {RawAxiosRequestConfig} [options] Override http request option.
+   * @throws {RequiredError}
+   * @memberof {{../className}}
+   */
+  async {{methodName}}({{#parameters}}{{name}}{{^required}}?{{/required}}: {{type}}{{#hasMore}}, {{/hasMore}}{{/parameters}}{{#hasParameters}}, {{/hasParameters}}options?: RawAxiosRequestConfig): Promise<AxiosResponse<{{returnType}}>> {
+    {{#requiredParams}}
+    if ({{name}} === null || {{name}} === undefined) {
+      throw new RequiredError('{{name}}', 'Required parameter {{name}} was null or undefined when calling {{methodName}}.');
+    }
+    {{/requiredParams}}
+
+    const localVarPath = '{{path}}'{{#pathParams}}.replace('{' + '{{baseName}}' + '}', encodeURIComponent(String({{name}}))){{/pathParams}};
+    const localVarUrlObj = new URL(localVarPath, this.configuration.basePath);
+    const localVarRequestOptions: RawAxiosRequestConfig = { method: '{{method}}', ...options };
+    const localVarHeaderParameter = {} as any;
+    const localVarQueryParameter = {} as any;
+
+    {{#queryParams}}
+    if ({{name}} !== undefined) {
+      localVarQueryParameter['{{baseName}}'] = {{name}};
+    }
+    {{/queryParams}}
+
+    {{#headerParams}}
+    if ({{name}} !== undefined && {{name}} !== null) {
+      localVarHeaderParameter['{{baseName}}'] = String({{name}});
+    }
+    {{/headerParams}}
+
+    {{#hasFormParams}}
+    localVarHeaderParameter['Content-Type'] = 'multipart/form-data';
+    {{/hasFormParams}}
+
+    {{#hasBodyParam}}
+    localVarHeaderParameter['Content-Type'] = 'application/json';
+    {{/hasBodyParam}}
+
+    // Apply configuration headers
+    Object.assign(localVarHeaderParameter, this.configuration.headers);
+
+    {{#hasQueryParams}}
+    localVarUrlObj.search = new URLSearchParams(localVarQueryParameter).toString();
+    {{/hasQueryParams}}
+
+    localVarRequestOptions.headers = localVarHeaderParameter;
+    localVarRequestOptions.url = localVarUrlObj.toString();
+
+    {{#hasBodyParam}}
+    localVarRequestOptions.data = {{bodyParam}};
+    {{/hasBodyParam}}
+
+    return this.axios.request(localVarRequestOptions);
+  }
+
+{{/methods}}
+}
