@@ -23,6 +23,7 @@ import {
   resolveRefsOption,
   exportStyleOption,
   skipJsExtensionsOption,
+  bareOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
@@ -41,12 +42,24 @@ export interface GenerateOptions {
   timeout?: number;
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   skipJsExtensions?: boolean;
+  bare?: boolean;
 }
 
 export async function generateAction(options: GenerateOptions): Promise<void> {
   const spinner = ora('Loading OpenAPI specification...').start();
 
   try {
+    // Validate bare mode
+    if (options.bare && options.mode !== 'models-only') {
+      spinner.fail('Generation failed');
+      Logger.error('--bare flag can only be used with --mode models-only');
+      process.exit(1);
+    }
+
+    if (options.bare && options.exportStyle) {
+      Logger.warn('--export-style is ignored when using --bare flag');
+    }
+
     // Parse headers
     const headers = options.header ? parseHeaders(options.header) : {};
     Logger.debug(`Headers: ${JSON.stringify(headers)}`);
@@ -91,6 +104,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       exportStyle: options.exportStyle,
+      bare: options.bare,
       mode: options.mode,
       templateDir: options.template,
     });
@@ -127,5 +141,6 @@ export const generateCommand = new Command('generate')
   .addOption(keepSpecOption())
   .addOption(timeoutOption())
   .addOption(exportStyleOption())
+  .addOption(bareOption())
   .addOption(skipJsExtensionsOption())
   .action(generateAction);

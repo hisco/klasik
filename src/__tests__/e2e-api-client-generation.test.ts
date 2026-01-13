@@ -566,5 +566,89 @@ describe('E2E: API Client Generation', () => {
       expect(fs.existsSync(path.join(tempDir, 'base.ts'))).toBe(false);
       expect(fs.existsSync(path.join(tempDir, 'configuration.ts'))).toBe(false);
     });
+
+    it('should include axios in package.json when generating API clients', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'test',
+              tags: ['test'],
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec, { includeOperations: true });
+
+      const generator = new Generator({
+        outputDir: tempDir,
+        mode: 'full',
+        esm: false,
+      });
+
+      await generator.generate(ir);
+
+      // Read generated package.json
+      const packageJsonPath = path.join(tempDir, 'package.json');
+      expect(fs.existsSync(packageJsonPath)).toBe(true);
+
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+
+      // Verify axios is included
+      expect(packageJson.dependencies).toBeDefined();
+      expect(packageJson.dependencies.axios).toBeDefined();
+      expect(packageJson.dependencies.axios).toBe('^1.6.0');
+    });
+
+    it('should not include axios in package.json in models-only mode', async () => {
+      const spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'test',
+              tags: ['test'],
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            User: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+              },
+            },
+          },
+        },
+      };
+
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec, { includeOperations: true });
+
+      const generator = new Generator({
+        outputDir: tempDir,
+        mode: 'models-only',
+        esm: false,
+      });
+
+      await generator.generate(ir);
+
+      // Read generated package.json
+      const packageJsonPath = path.join(tempDir, 'package.json');
+      expect(fs.existsSync(packageJsonPath)).toBe(true);
+
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+
+      // Verify axios is NOT included
+      expect(packageJson.dependencies.axios).toBeUndefined();
+    });
   });
 });

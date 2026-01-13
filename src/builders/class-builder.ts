@@ -42,6 +42,7 @@ export interface GeneratorOptions {
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   templateDir?: string;
   skipJsExtensions?: boolean;
+  bare?: boolean;
 }
 
 /**

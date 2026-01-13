@@ -70,10 +70,12 @@ export class Generator {
     await this.generateModels(ir, context);
 
     // Generate API client if in full mode and operations exist
+    let hasApiClient = false;
     if (this.options.mode === 'full' && ir.operations.size > 0) {
       const { ApiClientGenerator } = await import('../generators/api-client-generator');
       const apiClientGenerator = new ApiClientGenerator(this.options);
       await apiClientGenerator.generateFullClient(ir);
+      hasApiClient = true;
     }
 
     // Run after generation hooks
@@ -83,11 +85,11 @@ export class Generator {
     console.log('Saving generated files...');
     await this.project.save();
 
-    // Generate package.json
-    await this.generatePackageJson(context);
-
-    // Generate tsconfig.json
-    await this.generateTsConfig();
+    // Generate package.json and tsconfig.json (skip if bare mode)
+    if (!this.options.bare) {
+      await this.generatePackageJson(context, hasApiClient);
+      await this.generateTsConfig();
+    }
 
     console.log('✅ Code generation completed successfully!');
   }
@@ -96,7 +98,9 @@ export class Generator {
    * Generate all model files
    */
   private async generateModels(ir: SchemaIR, context: GenerationContext): Promise<void> {
-    const modelsDir = path.join(this.options.outputDir, 'models');
+    const modelsDir = this.options.bare
+      ? this.options.outputDir
+      : path.join(this.options.outputDir, 'models');
     this.ensureDirectory(modelsDir);
 
     for (const [name, schema] of ir.schemas) {
@@ -115,16 +119,8 @@ export class Generator {
     context: GenerationContext,
     modelsDir: string
   ): Promise<void> {
-    // Determine file name based on crdKindCase option
-    let fileName: string;
-    if (this.options.crdKindCase && schema.metadata.kind) {
-      // Use original Kind with case transformation
-      fileName = this.applyCaseTransform(schema.metadata.kind, this.options.crdKindCase);
-    } else {
-      // Default: use schema name with kebab-case
-      fileName = toKebabCase(schema.name);
-    }
-    fileName += '.ts';
+    // Determine file name using centralized logic
+    const fileName = this.getSchemaFileName(schema) + '.ts';
     const filePath = path.join(modelsDir, fileName);
 
     // Create a new ImportManager for this file, cloning the global one
@@ -245,6 +241,34 @@ export class Generator {
   private async generateModelsIndex(ir: SchemaIR, modelsDir: string): Promise<void> {
     const indexPath = path.join(modelsDir, 'index.ts');
 
+    // In bare mode, use simple direct exports and ignore exportStyle
+    if (this.options.bare) {
+      const sourceFile = this.project.createSourceFile(indexPath, '', { overwrite: true });
+
+      // Sort schemas alphabetically by name
+      const schemas = Array.from(ir.schemas.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
+
+      // Add export statement for each model
+      for (const schema of schemas) {
+        const fileName = this.getSchemaFileName(schema);
+        const importPath = this.options.esm ? `./${fileName}.js` : `./${fileName}`;
+
+        sourceFile.addExportDeclaration({
+          moduleSpecifier: importPath,
+        });
+      }
+
+      sourceFile.formatText({
+        indentSize: 2,
+        convertTabsToSpaces: true,
+      });
+
+      console.log('Generated index.ts with simple exports (bare mode)');
+      return;
+    }
+
     // Use ExportStyleManager if exportStyle option is set
     if (this.options.exportStyle) {
       // Save the project first so ExportStyleManager can read the files
@@ -265,12 +289,14 @@ export class Generator {
     // Default behavior: simple re-exports
     const sourceFile = this.project.createSourceFile(indexPath, '', { overwrite: true });
 
-    // Sort schema names alphabetically
-    const schemaNames = Array.from(ir.schemas.keys()).sort();
+    // Sort schemas alphabetically by name
+    const schemas = Array.from(ir.schemas.values()).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
 
     // Add export statement for each model
-    for (const name of schemaNames) {
-      const fileName = toKebabCase(name);
+    for (const schema of schemas) {
+      const fileName = this.getSchemaFileName(schema);
       const importPath = this.options.esm ? `./${fileName}.js` : `./${fileName}`;
 
       sourceFile.addExportDeclaration({
@@ -287,7 +313,7 @@ export class Generator {
   /**
    * Generate package.json
    */
-  private async generatePackageJson(context: GenerationContext): Promise<void> {
+  private async generatePackageJson(context: GenerationContext, hasApiClient: boolean): Promise<void> {
     const packageJson: any = {
       name: 'generated-models',
       version: '1.0.0',
@@ -297,6 +323,11 @@ export class Generator {
       type: this.options.esm ? 'module' : 'commonjs',
       dependencies: {},
     };
+
+    // Add axios if API client was generated
+    if (hasApiClient) {
+      packageJson.dependencies['axios'] = '^1.6.0';
+    }
 
     // Run plugin hooks to modify package.json
     await this.pluginRunner.runModifyPackageJson(packageJson, context);
@@ -387,6 +418,20 @@ export class Generator {
   private ensureDirectory(dir: string): void {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
+    }
+  }
+
+  /**
+   * Get the file name (without .ts extension) for a schema
+   * Uses the same logic as generateModel to ensure consistency
+   */
+  private getSchemaFileName(schema: SchemaDefinition): string {
+    if (this.options.crdKindCase && schema.metadata.kind) {
+      // Use original Kind with case transformation
+      return this.applyCaseTransform(schema.metadata.kind, this.options.crdKindCase);
+    } else {
+      // Default: use schema name with kebab-case
+      return toKebabCase(schema.name);
     }
   }
 

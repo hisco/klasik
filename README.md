@@ -62,6 +62,41 @@ klasik generate-jsonschema \
   --output ./src/generated
 ```
 
+#### Bare Mode
+
+Generate models directly in the output directory without wrapper structure:
+
+```bash
+klasik generate-crd \
+  --url ./my-crd.yaml \
+  --output ./src/models \
+  --bare
+```
+
+Output structure with `--bare`:
+```
+src/models/
+├── index.ts       # Simple exports
+├── application.ts
+└── app-project.ts
+```
+
+Default structure (without `--bare`):
+```
+src/models/
+├── models/
+│   ├── index.ts
+│   ├── application.ts
+│   └── app-project.ts
+├── package.json
+└── tsconfig.json
+```
+
+**Note**: The `--bare` flag:
+- Only works with models-only mode (generate-crd, generate-jsonschema, or generate with --mode models-only)
+- Skips package.json and tsconfig.json generation
+- Ignores --export-style flag (uses simple direct exports)
+
 ### Programmatic Usage
 
 ```typescript

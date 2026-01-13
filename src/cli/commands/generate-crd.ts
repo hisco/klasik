@@ -24,6 +24,8 @@ import {
   keepSpecOption,
   crdKindCaseOption,
   includeStatusOption,
+  exportStyleOption,
+  bareOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
@@ -40,6 +42,8 @@ export interface GenerateCrdOptions {
   template?: string;
   keepSpec?: boolean;
   crdKindCase?: 'pascal' | 'snake' | 'kebab';
+  exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
+  bare?: boolean;
   timeout?: number;
 }
 
@@ -159,6 +163,8 @@ export async function generateCrdAction(options: GenerateCrdOptions): Promise<vo
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       crdKindCase: options.crdKindCase,
+      exportStyle: options.exportStyle,
+      bare: options.bare,
       templateDir: options.template,
       mode: 'models-only',
     });
@@ -191,5 +197,7 @@ export const generateCrdCommand = new Command('generate-crd')
   .addOption(templateOption())
   .addOption(keepSpecOption())
   .addOption(crdKindCaseOption())
+  .addOption(exportStyleOption())
+  .addOption(bareOption())
   .addOption(timeoutOption())
   .action(generateCrdAction);

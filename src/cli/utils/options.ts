@@ -107,6 +107,13 @@ export function skipJsExtensionsOption(): Option {
 }
 
 /**
+ * Bare mode option builder
+ */
+export function bareOption(): Option {
+  return new Option('--bare', 'Generate models directly in output directory (models-only mode)').default(false);
+}
+
+/**
  * CRD kind case option builder
  */
 export function crdKindCaseOption(): Option {

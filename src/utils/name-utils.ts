@@ -27,14 +27,31 @@ export function toSnakeCase(str: string): string {
 }
 
 /**
- * Convert kebab-case or snake_case to PascalCase
- * Example: "app-project" -> "AppProject"
+ * Convert kebab-case, snake_case, or preserve PascalCase
+ * Example: "app-project" -> "AppProject", "AppProject" -> "AppProject"
  */
 export function toPascalCase(str: string): string {
-  return str
-    .split(/[-_]/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join('');
+  // If the string contains hyphens or underscores, split on them
+  if (str.includes('-') || str.includes('_')) {
+    return str
+      .split(/[-_]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+  }
+
+  // Otherwise, check if it's already PascalCase or camelCase
+  // Split on case transitions (e.g., "AppProject" -> ["App", "Project"])
+  const words = str.split(/(?=[A-Z])/).filter(word => word.length > 0);
+
+  // If we found multiple words (PascalCase/camelCase), preserve them
+  if (words.length > 1) {
+    return words
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+  }
+
+  // Single word: just capitalize first letter
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
 /**

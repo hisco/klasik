@@ -22,6 +22,8 @@ import {
   classValidatorOption,
   templateOption,
   keepSpecOption,
+  exportStyleOption,
+  bareOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
@@ -36,6 +38,8 @@ export interface GenerateJsonSchemaOptions {
   resolveRefs?: boolean;
   template?: string;
   keepSpec?: boolean;
+  exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
+  bare?: boolean;
   timeout?: number;
 }
 
@@ -157,6 +161,8 @@ export async function generateJsonSchemaAction(options: GenerateJsonSchemaOption
       esm: options.esm,
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
+      exportStyle: options.exportStyle,
+      bare: options.bare,
       templateDir: options.template,
       mode: 'models-only',
     });
@@ -187,5 +193,7 @@ export const generateJsonSchemaCommand = new Command('generate-jsonschema')
   .addOption(resolveRefsOption())
   .addOption(templateOption())
   .addOption(keepSpecOption())
+  .addOption(exportStyleOption())
+  .addOption(bareOption())
   .addOption(timeoutOption())
   .action(generateJsonSchemaAction);
