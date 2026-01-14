@@ -14,13 +14,14 @@ Perfect for:
 🎯 **Type-Safe** - Full TypeScript support with strict typing
 🔄 **class-transformer** - Automatic serialization/deserialization
 ✅ **class-validator** - Built-in validation decorators
+📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
 📦 **Multiple Formats** - OpenAPI, Kubernetes CRDs, JSON Schema
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
 🔗 **External $refs** - Automatic resolution of external schemas
 🎭 **Custom Templates** - Mustache-based customization
 ⚙️ **Flexible Output** - Multiple export styles (namespace, direct, both)
-🧪 **Well Tested** - Comprehensive test coverage (748 passing tests)
+🧪 **Well Tested** - Comprehensive test coverage (797 passing tests)
 🚀 **Production Ready** - Used in real-world projects
 📝 **Full CLI** - Rich command-line interface with 4 commands
 🔐 **Authentication** - Custom headers including Bearer tokens
@@ -238,6 +239,416 @@ const tasks = await api.listTasks();
 
 For more details, see the [Validation Guide](./docs/validation.md).
 
+## Ajv JSON Schema Validation
+
+Klasik can generate Ajv-based JSON Schema validation alongside or instead of class-validator decorators. This provides comprehensive JSON Schema Draft 2020-12 validation with deep nested object support and optimized performance.
+
+### Why Ajv Validation?
+
+**Advantages over class-validator:**
+- ✅ **Full JSON Schema compliance** - Supports all Draft 2020-12 features
+- ✅ **Deep nested validation** - Automatically validates nested objects at all levels
+- ✅ **Performance optimized** - Schema compilation is cached per class
+- ✅ **Standards-based** - Uses industry-standard JSON Schema format
+- ✅ **Independent** - Works alongside or without class-validator
+
+**When to use:**
+- Complex nested object structures (User → Address → Coordinates)
+- JSON Schema-first development workflows
+- Need for format validation (email, uuid, date-time, etc.)
+- Projects requiring JSON Schema compliance
+- High-performance validation scenarios
+
+### Basic Usage
+
+Enable with the `--use-ajv` flag:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./generated \
+  --use-ajv
+```
+
+### Generated Code Structure
+
+Each generated class includes:
+
+1. **`static getSchema()`** - Returns the JSON Schema
+2. **`static validateWithJsonSchema(data)`** - Validates data against the schema
+3. **Private cached validator** - Optimized for performance
+
+**Example generated class:**
+
+```typescript
+import { Ajv } from "ajv";
+import { addFormats } from "ajv-formats";
+import { Expose } from "class-transformer";
+
+export class User {
+  /**
+   * Get JSON Schema for User
+   * @returns JSON Schema Draft 2020-12
+   */
+  static getSchema(): object {
+    return {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "address": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "required": ["name", "email"]
+    };
+  }
+
+  private static _ajvInstance: Ajv | null = null;
+  private static _compiledValidator: any = null;
+
+  /** Get or create Ajv instance for User */
+  private static getAjvInstance(): Ajv {
+    if (!this._ajvInstance) {
+      this._ajvInstance = new Ajv({ allErrors: true, strict: false });
+      addFormats(this._ajvInstance);
+    }
+    return this._ajvInstance;
+  }
+
+  /** Get or create compiled validator for User (cached for performance) */
+  private static getCompiledValidator(): any {
+    if (!this._compiledValidator) {
+      const ajv = this.getAjvInstance();
+      const schema = this.getSchema();
+      this._compiledValidator = ajv.compile(schema);
+    }
+    return this._compiledValidator;
+  }
+
+  /**
+   * Validate data against JSON Schema with recursive nested validation
+   * @param data - Data to validate
+   * @returns Validation result with errors if any
+   */
+  static validateWithJsonSchema(data: unknown): { valid: boolean; errors: any[] } {
+    const validate = this.getCompiledValidator();
+    const valid = validate(data);
+
+    // Collect errors
+    const allErrors: any[] = validate.errors || [];
+
+    // Recursively validate nested objects that have validateWithJsonSchema method
+    if (valid && typeof data === "object" && data !== null) {
+      for (const [key, value] of Object.entries(data)) {
+        if (value && typeof value === "object") {
+          const constructor = (value as any).constructor;
+          if (constructor && typeof constructor.validateWithJsonSchema === "function") {
+            const nestedResult = constructor.validateWithJsonSchema(value);
+            if (!nestedResult.valid) {
+              allErrors.push(...nestedResult.errors.map((e: any) => ({
+                ...e,
+                instancePath: `/${key}${e.instancePath || ""}`
+              })));
+            }
+          }
+        }
+      }
+    }
+
+    return { valid: allErrors.length === 0, errors: allErrors };
+  }
+
+  @Expose()
+  name: string;
+
+  @Expose()
+  email: string;
+
+  @Expose()
+  address?: Address;
+}
+```
+
+### Using Validation Methods
+
+**Valid data:**
+
+```typescript
+import { User } from './generated/models';
+
+const userData = {
+  name: 'John Doe',
+  email: 'john@example.com'
+};
+
+const result = User.validateWithJsonSchema(userData);
+
+if (result.valid) {
+  console.log('✅ Data is valid!');
+} else {
+  console.error('❌ Validation failed:', result.errors);
+}
+```
+
+**Invalid data:**
+
+```typescript
+const invalidData = {
+  name: '',  // minLength: 1 violation
+  email: 'not-an-email'  // format: email violation
+};
+
+const result = User.validateWithJsonSchema(invalidData);
+
+console.log(result);
+// {
+//   valid: false,
+//   errors: [
+//     {
+//       instancePath: '/name',
+//       schemaPath: '#/properties/name/minLength',
+//       keyword: 'minLength',
+//       params: { limit: 1 },
+//       message: 'must NOT have fewer than 1 characters'
+//     },
+//     {
+//       instancePath: '/email',
+//       schemaPath: '#/properties/email/format',
+//       keyword: 'format',
+//       params: { format: 'email' },
+//       message: 'must match format "email"'
+//     }
+//   ]
+// }
+```
+
+### Deep Nested Validation
+
+The validator automatically validates nested objects recursively:
+
+```typescript
+import { User, Address } from './generated/models';
+
+// Create nested structure
+const address = new Address();
+address.street = '';  // Invalid: minLength violation
+address.city = 'Springfield';
+address.zipCode = 'INVALID';  // Invalid: pattern violation
+
+const user = {
+  name: 'John Doe',
+  email: 'john@example.com',
+  address  // Nested object
+};
+
+const result = User.validateWithJsonSchema(user);
+
+console.log(result);
+// {
+//   valid: false,
+//   errors: [
+//     {
+//       instancePath: '/address/street',
+//       keyword: 'minLength',
+//       message: 'must NOT have fewer than 1 characters'
+//     },
+//     {
+//       instancePath: '/address/zipCode',
+//       keyword: 'pattern',
+//       message: 'must match pattern "^[0-9]{5}$"'
+//     }
+//   ]
+// }
+```
+
+**Note:** Error paths include the full nested path (`/address/street`), making it easy to identify exactly where validation failed.
+
+### Supported Validations
+
+All JSON Schema Draft 2020-12 validation keywords are supported:
+
+**String constraints:**
+- `minLength`, `maxLength`
+- `pattern` (regex)
+- `format` (email, uuid, date-time, uri, etc.)
+
+**Numeric constraints:**
+- `minimum`, `maximum`
+- `exclusiveMinimum`, `exclusiveMaximum`
+- `multipleOf`
+
+**Array constraints:**
+- `minItems`, `maxItems`
+- `uniqueItems`
+
+**Object constraints:**
+- `required` properties
+- `additionalProperties`
+
+**Other:**
+- `enum` values
+- `nullable` types
+- Union types with `anyOf`
+
+### Performance Optimization
+
+The generated code includes **compilation caching** for optimal performance:
+
+```typescript
+// First validation: Schema is compiled and cached
+User.validateWithJsonSchema(data1);  // Compile + Validate
+
+// Subsequent validations: Uses cached compiled validator
+User.validateWithJsonSchema(data2);  // Validate only (fast!)
+User.validateWithJsonSchema(data3);  // Validate only (fast!)
+```
+
+**Benefits:**
+- Schema compiled once per class, not per validation
+- Significant performance improvement for repeated validations
+- Singleton Ajv instance shared across validations
+
+### Combining with class-validator
+
+You can use both validation approaches together:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./generated \
+  --class-validator \
+  --use-ajv
+```
+
+**Generated class has both:**
+
+```typescript
+export class User {
+  // class-validator decorators
+  @IsString()
+  @MinLength(1)
+  @Expose()
+  name: string;
+
+  @IsEmail()
+  @Expose()
+  email: string;
+
+  // PLUS Ajv validation methods
+  static getSchema(): object { /* ... */ }
+  static validateWithJsonSchema(data: unknown) { /* ... */ }
+}
+```
+
+**Use case:** Runtime validation with class-validator in NestJS controllers, plus JSON Schema validation for external integrations.
+
+### Dependencies
+
+When using `--use-ajv`, the following dependencies are automatically added to `package.json`:
+
+```json
+{
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1"
+  }
+}
+```
+
+Install them in your project:
+
+```bash
+cd generated
+npm install
+```
+
+### Complete Example
+
+```bash
+# Generate models with Ajv validation
+klasik generate-jsonschema \
+  --url ./schemas/user.json \
+  --output ./src/models \
+  --use-ajv
+
+# Use in your code
+cat > example.ts << 'EOF'
+import { User } from './src/models';
+
+// Valid user
+const validUser = {
+  name: 'Alice Smith',
+  email: 'alice@example.com',
+  age: 30
+};
+
+const result1 = User.validateWithJsonSchema(validUser);
+console.log('Valid:', result1.valid);  // true
+
+// Invalid user
+const invalidUser = {
+  name: '',  // Too short
+  email: 'invalid-email',
+  age: -5  // Negative age
+};
+
+const result2 = User.validateWithJsonSchema(invalidUser);
+console.log('Valid:', result2.valid);  // false
+console.log('Errors:', result2.errors);
+// [
+//   { instancePath: '/name', message: 'must NOT have fewer than 1 characters' },
+//   { instancePath: '/email', message: 'must match format "email"' },
+//   { instancePath: '/age', message: 'must be >= 0' }
+// ]
+EOF
+
+npx ts-node example.ts
+```
+
+### Advanced: Accessing the JSON Schema
+
+You can access the generated JSON Schema directly:
+
+```typescript
+import { User } from './generated/models';
+
+// Get the schema
+const schema = User.getSchema();
+
+console.log(JSON.stringify(schema, null, 2));
+// {
+//   "$schema": "https://json-schema.org/draft/2020-12/schema",
+//   "type": "object",
+//   "properties": {
+//     "name": { "type": "string", "minLength": 1 },
+//     "email": { "type": "string", "format": "email" }
+//   },
+//   "required": ["name", "email"],
+//   "additionalProperties": false
+// }
+
+// Use with external JSON Schema validators
+import Ajv from 'ajv';
+const ajv = new Ajv();
+const validate = ajv.compile(User.getSchema());
+validate(data);
+```
+
+**Use cases:**
+- Generating OpenAPI documentation
+- Sharing schemas with other systems
+- Custom validation workflows
+- Schema introspection
+
 ## CLI Commands
 
 ### `klasik generate`
@@ -262,6 +673,7 @@ klasik generate [options]
 | `--skip-js-extensions` | Skip .js extensions (for bundlers) | `false` |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
+| `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--timeout <ms>` | Request timeout | `30000` |
 | `--template <dir>` | Custom template directory | - |
@@ -291,6 +703,19 @@ klasik generate \
   --output ./src/api \
   --nestjs-swagger \
   --class-validator
+
+# With Ajv JSON Schema validation
+klasik generate \
+  --url https://api.example.com/spec.json \
+  --output ./src/api \
+  --use-ajv
+
+# With both class-validator and Ajv
+klasik generate \
+  --url https://api.example.com/spec.json \
+  --output ./src/api \
+  --class-validator \
+  --use-ajv
 
 # With external refs and authentication
 klasik generate \
@@ -373,6 +798,7 @@ klasik generate-crd [options]
 | `--crd-kind-case <format>` | Folder naming: `pascal`, `snake`, `kebab` | `pascal` |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
+| `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--esm` | Add .js extensions for ESM | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--resolve-refs` | Resolve external $ref files | `false` |
@@ -428,6 +854,7 @@ klasik generate-jsonschema [options]
 | `-o, --output <dir>` | Output directory (required) | - |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
+| `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--esm` | Add .js extensions for ESM | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--resolve-refs` | Resolve external $ref files | `false` |
@@ -455,6 +882,12 @@ klasik generate-jsonschema \
   --output ./src/types \
   --nestjs-swagger \
   --class-validator
+
+# With Ajv JSON Schema validation
+klasik generate-jsonschema \
+  --url ./schemas/user.json \
+  --output ./src/types \
+  --use-ajv
 ```
 
 ## Kubernetes CRD Support
@@ -890,6 +1323,8 @@ Built with:
 - [ts-morph](https://github.com/dsherret/ts-morph) - TypeScript Compiler API wrapper
 - [class-transformer](https://github.com/typestack/class-transformer) - Object transformation
 - [class-validator](https://github.com/typestack/class-validator) - Runtime validation
+- [ajv](https://github.com/ajv-validator/ajv) - JSON Schema validator
+- [ajv-formats](https://github.com/ajv-validator/ajv-formats) - Format validation for Ajv
 - [mustache](https://github.com/janl/mustache.js) - Template engine
 - [commander](https://github.com/tj/commander.js) - CLI framework
 

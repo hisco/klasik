@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Address",
+  "type": "object",
+  "properties": {
+    "street": {
+      "type": "string",
+      "minLength": 1
+    },
+    "city": {
+      "type": "string",
+      "minLength": 1
+    },
+    "zipCode": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$"
+    }
+  },
+  "required": ["street", "city", "zipCode"]
+}

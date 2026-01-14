@@ -70,6 +70,13 @@ export function classValidatorOption(): Option {
 }
 
 /**
+ * Ajv validator option builder
+ */
+export function useAjvOption(): Option {
+  return new Option('--use-ajv', 'Add Ajv JSON Schema validation methods').default(false);
+}
+
+/**
  * Template directory option builder
  */
 export function templateOption(): Option {

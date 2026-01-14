@@ -18,6 +18,7 @@ import {
   esmOption,
   nestjsSwaggerOption,
   classValidatorOption,
+  useAjvOption,
   templateOption,
   keepSpecOption,
   resolveRefsOption,
@@ -37,6 +38,7 @@ export interface GenerateOptions {
   esm?: boolean;
   nestjsSwagger?: boolean;
   classValidator?: boolean;
+  useAjv?: boolean;
   template?: string;
   keepSpec?: boolean;
   timeout?: number;
@@ -103,6 +105,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       esm: options.esm && !options.skipJsExtensions,
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
+      useAjv: options.useAjv,
       exportStyle: options.exportStyle,
       bare: options.bare,
       mode: options.mode,
@@ -137,6 +140,7 @@ export const generateCommand = new Command('generate')
   .addOption(esmOption())
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())
+  .addOption(useAjvOption())
   .addOption(templateOption())
   .addOption(keepSpecOption())
   .addOption(timeoutOption())

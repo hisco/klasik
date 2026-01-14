@@ -10,10 +10,6 @@
       "read": true,
       "write": true,
       "description": "Allow all file read and write operations in this project"
-    },
-    "../klasik": {
-      "read": true,
-      "description": "Allow reading files from the klasik folder"
     }
   }
 }

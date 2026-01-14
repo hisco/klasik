@@ -38,6 +38,7 @@ export interface GeneratorOptions {
   esm?: boolean;
   nestJsSwagger?: boolean;
   classValidator?: boolean;
+  useAjv?: boolean;
   crdKindCase?: 'kebab' | 'snake' | 'pascal' | 'camel' | 'none';
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   templateDir?: string;
