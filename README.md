@@ -1,12 +1,13 @@
 # Klasik
 
-Generate TypeScript clients from OpenAPI specifications, Kubernetes CRDs, and JSON Schema with full type safety and class-transformer support.
+Generate TypeScript clients from OpenAPI specifications, Kubernetes CRDs, JSON Schema, and Go structs with full type safety and class-transformer support.
 
 Perfect for:
 - 🚀 Kubernetes operators and controllers
 - 🔧 REST API clients with type safety
 - 📦 NestJS backend services
 - 🎯 Type-safe microservice communication
+- 🔄 Go-to-TypeScript code sharing
 
 ## Features
 
@@ -16,7 +17,7 @@ Perfect for:
 ✅ **class-validator** - Built-in validation decorators
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
-📦 **Multiple Formats** - OpenAPI, Kubernetes CRDs, JSON Schema
+📦 **Multiple Formats** - OpenAPI, Kubernetes CRDs, JSON Schema, Go structs
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
 🔗 **External $refs** - Automatic resolution of external schemas
 🎭 **Custom Templates** - Mustache-based customization
@@ -61,6 +62,17 @@ Generate from JSON Schema:
 klasik generate-jsonschema \
   --url ./schemas/user.json \
   --output ./src/generated
+```
+
+Generate from Go structs (requires Go installed, auto-setup on first use):
+
+```bash
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Metadata" \
+  --type "helm.sh/helm/v3/pkg/chart.Chart" \
+  --output ./src/generated \
+  --class-validator \
+  --nestjs-swagger
 ```
 
 #### Bare Mode
@@ -890,6 +902,79 @@ klasik generate-jsonschema \
   --use-ajv
 ```
 
+### `klasik generate-go`
+
+Generate TypeScript models from Go structs using runtime reflection.
+
+**Usage:**
+
+```bash
+klasik generate-go [options]
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-t, --type <type>` | Go type path (package.Type) (repeatable, required) | - |
+| `-o, --output <dir>` | Output directory (required) | - |
+| `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
+| `--class-validator` | Add class-validator decorators | `false` |
+| `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
+| `--esm` | Add .js extensions for ESM | `false` |
+| `--template <dir>` | Custom template directory | - |
+| `--export-style <style>` | Export style: `namespace`, `direct`, `both`, `none` | `namespace` |
+| `--bare` | Generate models directly in output dir | `false` |
+| `--go-tool-path <path>` | Path to go-schema-gen binary | auto-detected |
+| `--allow-additional-properties` | Allow additional properties in JSON Schema | `false` |
+
+**Prerequisites:**
+- Go 1.21+ must be installed (first-time setup is automatic)
+- Types must be registered in `tools/go-schema-gen/registry.go`
+
+**Examples:**
+
+```bash
+# Generate from Helm chart types
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Metadata" \
+  --type "helm.sh/helm/v3/pkg/chart.Chart" \
+  --output ./src/helm-types \
+  --nestjs-swagger \
+  --class-validator
+
+# Generate with Ajv validation
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Metadata" \
+  --output ./src/types \
+  --use-ajv
+
+# Generate for ESM
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Chart" \
+  --output ./src/types \
+  --esm
+```
+
+**How it works:**
+1. Uses Go reflection via `invopop/jsonschema` library
+2. Generates JSON Schema from Go structs
+3. Feeds to existing JsonSchemaParser
+4. Generates TypeScript with full type safety
+
+**Adding new types:**
+
+Edit `tools/go-schema-gen/registry.go`:
+```go
+import mypackage "github.com/org/package"
+
+var typeRegistry = map[string]interface{}{
+    "github.com/org/package.MyStruct": mypackage.MyStruct{},
+}
+```
+
+Then rebuild: `cd tools/go-schema-gen && ./build.sh`
+
 ## Kubernetes CRD Support
 
 Klasik can generate TypeScript models directly from Kubernetes CustomResourceDefinitions (CRDs). Perfect for working with custom Kubernetes resources like ArgoCD Applications, Cert-Manager Certificates, or your own custom resources.
@@ -1005,6 +1090,193 @@ const pkg: Package = {
 
 // Full TypeScript intellisense and type checking!
 ```
+
+## Go Struct Support
+
+Klasik can generate TypeScript models from Go structs using runtime reflection. Perfect for sharing types between Go backends and TypeScript frontends, or for generating types from existing Go packages like Helm, Kubernetes, or your own custom packages.
+
+### Features
+
+- ✅ **Runtime reflection** - Uses Go's reflection API with `invopop/jsonschema`
+- ✅ **Struct tag support** - Respects `json`, `yaml`, `jsonschema` tags
+- ✅ **Multiple types** - Generate from multiple structs in one command
+- ✅ **Automatic references** - Nested types resolved with $ref
+- ✅ **Full decorator support** - NestJS, class-validator, class-transformer, Ajv
+- ✅ **Production-ready** - Tested with Helm chart types
+
+### Prerequisites
+
+- **Go 1.21+** must be installed (download from [go.dev](https://go.dev/dl/))
+- Types must be registered in `tools/go-schema-gen/registry.go`
+
+**Note:** The first time you use `generate-go`, Klasik will automatically:
+1. Check if Go is installed
+2. Download Go dependencies (`go mod tidy`)
+3. Build the Go schema generator tool
+
+This only happens once - subsequent runs use the cached binary.
+
+### How It Works
+
+1. Go tool uses reflection to inspect struct at runtime
+2. Generates JSON Schema Draft 2020-12
+3. Feeds to existing JsonSchemaParser
+4. Generates TypeScript with full type safety
+
+**Architecture:**
+```
+Go Struct → Reflection → JSON Schema → JsonSchemaParser → IR → TypeScript
+```
+
+### Quick Start
+
+First-time users: Just run the command! Klasik will automatically set up everything:
+
+```bash
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Metadata" \
+  --output ./src/helm-types
+
+# Output:
+# Building Go schema generator (first time only)...
+# Installing Go dependencies...
+# Compiling Go tool...
+# ✓ Go tool built successfully
+# ✔ Generation complete!
+```
+
+Subsequent runs are instant (no rebuild needed):
+
+```bash
+klasik generate-go \
+  --type "helm.sh/helm/v3/pkg/chart.Chart" \
+  --output ./src/helm-types \
+  --nestjs-swagger \
+  --class-validator
+```
+
+### Struct Tag Mapping
+
+Go struct tags are automatically converted to JSON Schema:
+
+| Go Tag | Effect | JSON Schema |
+|--------|--------|-------------|
+| `json:"fieldName"` | Property name | `"properties": {"fieldName": {...}}` |
+| `json:",omitempty"` | Optional field | Not in `"required"` array |
+| `jsonschema:"required"` | Force required | Added to `"required"` array |
+| `jsonschema:"minLength=5"` | Validation | `"minLength": 5` |
+| `jsonschema:"pattern=^[A-Z]"` | Regex | `"pattern": "^[A-Z]"` |
+| `jsonschema_description:"..."` | Documentation | `"description": "..."` |
+
+**Example Go Struct:**
+```go
+type Metadata struct {
+    Name        string `json:"name" jsonschema:"required,minLength=1"`
+    Version     string `json:"version" jsonschema:"required"`
+    Description string `json:"description,omitempty"`
+}
+```
+
+**Generated TypeScript:**
+```typescript
+export class Metadata {
+  @ApiProperty()
+  @IsString()
+  name: string;
+
+  @ApiProperty()
+  @IsString()
+  version: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  description?: string;
+}
+```
+
+### Adding New Types
+
+To add new Go packages/types:
+
+1. Edit `tools/go-schema-gen/registry.go`:
+```go
+import (
+    chart "helm.sh/helm/v3/pkg/chart"
+    mypackage "github.com/org/package"
+)
+
+var typeRegistry = map[string]interface{}{
+    // Existing types
+    "helm.sh/helm/v3/pkg/chart.Metadata": chart.Metadata{},
+
+    // Add your types
+    "github.com/org/package.MyStruct": mypackage.MyStruct{},
+}
+```
+
+2. Update dependencies:
+```bash
+cd tools/go-schema-gen
+go mod tidy
+```
+
+3. Rebuild the tool:
+```bash
+./build.sh
+```
+
+4. Use your new type:
+```bash
+klasik generate-go \
+  --type "github.com/org/package.MyStruct" \
+  --output ./src/types
+```
+
+### Limitations
+
+- **Type Registry Required** - Types must be pre-registered (no dynamic loading)
+- **Requires Recompilation** - Adding new packages requires rebuilding the Go tool
+- **Go Installation** - Go must be installed on the system
+
+### Troubleshooting
+
+**"Go is not installed" error:**
+```bash
+# Install Go from https://go.dev/dl/
+# On macOS with Homebrew:
+brew install go
+
+# Verify installation:
+go version
+```
+
+**"Failed to build Go tool" error:**
+```bash
+# Try manual build:
+cd tools/go-schema-gen
+./build.sh
+
+# Or rebuild from scratch:
+rm -rf ../../dist/bin/go-schema-gen
+klasik generate-go --type "..." --output ...
+```
+
+**Rebuild the Go tool manually:**
+```bash
+cd tools/go-schema-gen
+go mod tidy
+./build.sh
+```
+
+### Future Enhancements
+
+Planned features for future releases:
+- Go Plugin support for dynamic loading
+- Auto-discovery of types in packages
+- `validate` tag support
+- Custom type mappings
+- Multi-platform pre-built binaries
 
 ## NestJS Integration
 

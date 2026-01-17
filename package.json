@@ -1,7 +1,7 @@
 {
   "name": "klasik",
-  "version": "2.0.9",
-  "description": "TypeScript code generator from OpenAPI/CRD/JSON Schema - rebuilt from ground up with AST-based generation",
+  "version": "2.1.0",
+  "description": "TypeScript code generator from OpenAPI/CRD/JSON Schema/Go structs - rebuilt from ground up with AST-based generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -10,12 +10,14 @@
   "files": [
     "dist/",
     "templates/",
+    "tools/go-schema-gen/",
     "docs/",
     "demo-output/",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:go && tsc",
+    "build:go": "cd tools/go-schema-gen && ./build.sh || echo 'Warning: Go tool build failed. Go generation will not be available.'",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
