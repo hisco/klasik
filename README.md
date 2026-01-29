@@ -806,6 +806,7 @@ klasik generate-crd [options]
 |--------|-------------|---------|
 | `-u, --url <url>` | CRD URL or file path (repeatable) | - |
 | `-o, --output <dir>` | Output directory (required) | - |
+| `-i, --include <schemas>` | Include only specified schemas and dependencies | - |
 | `--include-status` | Generate status schemas | `false` |
 | `--crd-kind-case <format>` | Folder naming: `pascal`, `snake`, `kebab` | `pascal` |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
@@ -846,6 +847,20 @@ klasik generate-crd \
   --url https://private-repo.com/crd.yaml \
   --output ./src/types \
   --header "Authorization: Bearer ${TOKEN}"
+
+# Filter to specific schemas (Gateway + dependencies only)
+klasik generate-crd \
+  --url https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml \
+  --output ./src/types \
+  --include Gateway \
+  --bare
+
+# Filter to multiple schemas
+klasik generate-crd \
+  --url https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml \
+  --output ./src/types \
+  --include Gateway,HTTPRoute \
+  --bare
 ```
 
 ### `klasik generate-jsonschema`
@@ -989,6 +1004,40 @@ Klasik can generate TypeScript models directly from Kubernetes CustomResourceDef
 - ✅ **Full decorator support** - NestJS, class-validator, class-transformer
 - ✅ **Status schemas** - Optional with `--include-status`
 - ✅ **Version support** - Handles multiple CRD versions (v1alpha1, v1, etc.)
+
+### Schema Filtering
+
+When working with large CRD collections (like Gateway API), you can filter to generate only specific schemas and their dependencies:
+
+```bash
+# Generate only Gateway and its dependencies (15 schemas instead of 99)
+klasik generate-crd \
+  --url https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml \
+  --output ./src/types \
+  --include Gateway \
+  --bare
+```
+
+**Multiple schemas:**
+
+```bash
+# Comma-separated
+klasik generate-crd -u crds.yaml -o ./out --include Gateway,HTTPRoute
+
+# Repeatable flag
+klasik generate-crd -u crds.yaml -o ./out -i Gateway -i HTTPRoute
+```
+
+**How it works:**
+1. Parses all CRDs and builds the full IR (intermediate representation)
+2. Finds specified schemas and traverses their dependencies (arrays, unions, dictionaries)
+3. Generates only the filtered set of schemas
+4. Handles circular references safely
+
+**Benefits:**
+- Smaller output (only what you need)
+- Faster compilation
+- Cleaner imports
 
 ### Automatic Deduplication
 
