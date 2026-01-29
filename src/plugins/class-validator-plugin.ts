@@ -236,14 +236,29 @@ export class ClassValidatorPlugin implements GeneratorPlugin {
     // Pattern (regex) constraint
     if (constraints.pattern) {
       context.importManager.addImport('class-validator', 'Matches');
-      // Use the pattern as-is - ts-morph handles proper escaping
-      // Only escape single quotes if they appear in the pattern
-      const pattern = constraints.pattern.replace(/'/g, "\\'");
 
-      property.addDecorator({
-        name: 'Matches',
-        arguments: [`/${pattern}/`],
-      });
+      // Check if pattern contains '/' which would need escaping in regex literal
+      // Using new RegExp() is safer as it avoids:
+      // 1. '/' being interpreted as regex delimiter
+      // 2. '//' being interpreted as a comment
+      if (constraints.pattern.includes('/')) {
+        // Use new RegExp() constructor to avoid delimiter issues
+        // Escape backslashes for string literal and escape single quotes
+        const escapedPattern = constraints.pattern
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'");
+        property.addDecorator({
+          name: 'Matches',
+          arguments: [`new RegExp('${escapedPattern}')`],
+        });
+      } else {
+        // Use regex literal for simple patterns without '/'
+        const pattern = constraints.pattern.replace(/'/g, "\\'");
+        property.addDecorator({
+          name: 'Matches',
+          arguments: [`/${pattern}/`],
+        });
+      }
     }
 
     // Array constraints

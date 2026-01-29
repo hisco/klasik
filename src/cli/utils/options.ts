@@ -137,6 +137,16 @@ export function includeStatusOption(): Option {
 }
 
 /**
+ * Include schemas option builder (for filtering)
+ */
+export function includeOption(): Option {
+  return new Option(
+    '-i, --include <schemas...>',
+    'Include only specified schemas and their dependencies (comma-separated or repeatable)'
+  );
+}
+
+/**
  * Parse headers from string array
  * Format: "Key: Value"
  */
@@ -168,6 +178,19 @@ export function parseHeaders(headers: string[]): Record<string, string> {
  */
 export function collectValues(value: string, previous: string[]): string[] {
   return previous.concat([value]);
+}
+
+/**
+ * Parse include option values (handles both comma-separated and repeatable)
+ */
+export function parseIncludeValues(values: string[]): string[] {
+  const result: string[] = [];
+  for (const value of values) {
+    // Handle comma-separated values
+    const parts = value.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+    result.push(...parts);
+  }
+  return result;
 }
 
 /**

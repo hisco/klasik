@@ -11,6 +11,7 @@ import { CRDToIRConverter } from '../../parsers/crd-to-ir';
 import { SpecLoader } from '../../loaders/spec-loader';
 import { Logger } from '../utils/logger';
 import { SchemaIR, IRHelpers } from '../../ir/types';
+import { IRFilter } from '../../ir/ir-filter';
 import ora from 'ora';
 import {
   outputOption,
@@ -25,10 +26,12 @@ import {
   keepSpecOption,
   crdKindCaseOption,
   includeStatusOption,
+  includeOption,
   exportStyleOption,
   bareOption,
   parseHeaders,
   collectValues,
+  parseIncludeValues,
 } from '../utils/options';
 
 export interface GenerateCrdOptions {
@@ -47,6 +50,7 @@ export interface GenerateCrdOptions {
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   bare?: boolean;
   timeout?: number;
+  include?: string[];
 }
 
 /**
@@ -154,8 +158,28 @@ export async function generateCrdAction(options: GenerateCrdOptions): Promise<vo
 
     // Merge all IRs
     spinner.text = 'Merging schemas...';
-    const mergedIR = mergeIRs(irs);
+    let mergedIR = mergeIRs(irs);
     Logger.debug(`Merged IR: ${mergedIR.schemas.size} schema(s)`);
+
+    // Apply filtering if --include is specified
+    if (options.include && options.include.length > 0) {
+      spinner.text = 'Filtering schemas...';
+      const includeSchemas = parseIncludeValues(options.include);
+      const filter = new IRFilter();
+      const filterResult = filter.filter(mergedIR, { include: includeSchemas });
+
+      // Warn about missing schemas
+      if (filterResult.missingSchemas.length > 0) {
+        Logger.warn(`Schemas not found: ${filterResult.missingSchemas.join(', ')}`);
+      }
+
+      Logger.debug(
+        `Filtered IR: ${filterResult.stats.filteredCount} schema(s) ` +
+          `(${filterResult.stats.dependenciesAdded} dependencies added)`
+      );
+
+      mergedIR = filterResult.ir;
+    }
 
     // Generate code
     spinner.text = 'Generating TypeScript code...';
@@ -191,6 +215,7 @@ export const generateCrdCommand = new Command('generate-crd')
   .description('Generate TypeScript models from Kubernetes CRDs')
   .requiredOption('-u, --url <url>', 'CRD URL or file path (repeatable)', collectValues, [])
   .addOption(outputOption('Output directory'))
+  .addOption(includeOption())
   .addOption(includeStatusOption())
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())

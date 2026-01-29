@@ -678,6 +678,95 @@ describe('ClassValidatorPlugin', () => {
       expect(matchesDecorator!.getText()).toContain('\\w+\\d+');
     });
 
+    it('should handle patterns containing forward slashes (URI pattern)', () => {
+      const sourceFile = project.createSourceFile(
+        'test-uri.ts',
+        'export class Resource {}'
+      );
+      const classDecl = sourceFile.getClass('Resource')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'uri',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Resource');
+      // This is the actual URI pattern from gateway-api that causes the issue
+      const uriPattern = '^(([^:/?#]+):)(//([^/?#]*))([^?#]*)(\\?([^#]*))?(#(.*))?';
+      const propertyDef = createPropertyWithOptions(
+        'uri',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        {
+          required: true,
+          constraints: {
+            pattern: uriPattern,
+          },
+        }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const matchesDecorator = propertyDecl.getDecorator('Matches');
+      expect(matchesDecorator).toBeDefined();
+
+      // Get the full generated code and verify it's valid TypeScript
+      const generatedCode = sourceFile.getFullText();
+
+      // The code should be parseable - create a new project to verify
+      const verifyProject = new Project({ useInMemoryFileSystem: true });
+      // This should not throw - if it does, the generated code is invalid
+      expect(() => {
+        verifyProject.createSourceFile('verify.ts', generatedCode);
+      }).not.toThrow();
+
+      // Should use new RegExp() for patterns with forward slashes
+      expect(generatedCode).toContain('new RegExp');
+      // Verify the pattern is preserved
+      expect(generatedCode).toContain('//');
+    });
+
+    it('should handle patterns with forward slash as regex delimiter', () => {
+      const sourceFile = project.createSourceFile(
+        'test-k8s.ts',
+        'export class Condition {}'
+      );
+      const classDecl = sourceFile.getClass('Condition')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'type',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Condition');
+      // This pattern from gateway-api has '/)?' which breaks regex literals
+      const k8sPattern = '^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$';
+      const propertyDef = createPropertyWithOptions(
+        'type',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        {
+          required: true,
+          constraints: {
+            pattern: k8sPattern,
+          },
+        }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const matchesDecorator = propertyDecl.getDecorator('Matches');
+      expect(matchesDecorator).toBeDefined();
+
+      // Get the full generated code and verify it's valid TypeScript
+      const generatedCode = sourceFile.getFullText();
+
+      // The code should be parseable - create a new project to verify
+      const verifyProject = new Project({ useInMemoryFileSystem: true });
+      expect(() => {
+        verifyProject.createSourceFile('verify.ts', generatedCode);
+      }).not.toThrow();
+
+      // Should use new RegExp() for patterns with forward slashes
+      expect(generatedCode).toContain('new RegExp');
+    });
+
     it('should add @ArrayMinSize for minItems constraint', () => {
       const sourceFile = project.createSourceFile(
         'test.ts',
