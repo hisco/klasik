@@ -11,3 +11,6 @@ demo-generated/
 .vscode/
 .idea/
 Thumbs.db
+
+# Built Go binary (rebuilt during npm build)
+tools/go-schema-gen/go-schema-gen

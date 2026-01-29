@@ -1,6 +1,6 @@
 {
   "name": "klasik",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "description": "TypeScript code generator from OpenAPI/CRD/JSON Schema/Go structs - rebuilt from ground up with AST-based generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,10 +9,13 @@
   },
   "files": [
     "dist/",
+    "!dist/__tests__/",
     "templates/",
-    "tools/go-schema-gen/",
-    "docs/",
-    "demo-output/",
+    "tools/go-schema-gen/*.go",
+    "tools/go-schema-gen/*.sh",
+    "tools/go-schema-gen/*.md",
+    "tools/go-schema-gen/go.mod",
+    "tools/go-schema-gen/go.sum",
     "README.md"
   ],
   "scripts": {
