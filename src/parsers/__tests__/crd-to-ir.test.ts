@@ -640,5 +640,75 @@ describe('CRDToIRConverter', () => {
       expect(objectMeta.properties.has('labels')).toBe(true);
       expect(objectMeta.properties.has('annotations')).toBe(true);
     });
+
+    it('should link metadata property to ObjectMeta schema', () => {
+      const crd: ParsedCRD = {
+        apiVersion: 'apiextensions.k8s.io/v1',
+        kind: 'CustomResourceDefinition',
+        metadata: {
+          name: 'gateways.gateway.networking.k8s.io',
+          group: 'gateway.networking.k8s.io',
+          kind: 'Gateway',
+          plural: 'gateways',
+        },
+        specVersion: 'v1',
+        versions: [
+          {
+            name: 'v1',
+            served: true,
+            storage: true,
+            schema: {
+              type: 'object',
+              properties: {
+                apiVersion: { type: 'string' },
+                kind: { type: 'string' },
+                metadata: { type: 'object' }, // No properties - standard K8s metadata
+                spec: {
+                  type: 'object',
+                  properties: {
+                    gatewayClassName: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        storageVersion: 'v1',
+        schemas: new Map([
+          [
+            'v1',
+            {
+              type: 'object',
+              properties: {
+                apiVersion: { type: 'string' },
+                kind: { type: 'string' },
+                metadata: { type: 'object' },
+                spec: {
+                  type: 'object',
+                  properties: {
+                    gatewayClassName: { type: 'string' },
+                  },
+                },
+              },
+            },
+          ],
+        ]),
+        hasStatus: false,
+      };
+
+      const converter = new CRDToIRConverter();
+      const ir = converter.convert(crd);
+
+      // ObjectMeta schema should be created
+      expect(ir.schemas.has('ObjectMeta')).toBe(true);
+
+      // The metadata property on Gateway should reference ObjectMeta
+      const gatewaySchema = ir.schemas.get('Gateway')!;
+      const metadataProp = gatewaySchema.properties.get('metadata')!;
+
+      // This is the bug: metadata.type should be a reference to ObjectMeta, not 'object'/'unknown'
+      expect(metadataProp.type.kind).toBe('reference');
+      expect(metadataProp.type.name).toBe('ObjectMeta');
+    });
   });
 });

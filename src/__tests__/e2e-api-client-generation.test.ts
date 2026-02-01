@@ -42,7 +42,7 @@ describe('E2E: API Client Generation', () => {
               parameters: [
                 {
                   name: 'limit',
-                  in: 'query',
+                  in: 'query' as const,
                   description: 'Maximum number of pets to return',
                   required: false,
                   schema: {
@@ -103,7 +103,7 @@ describe('E2E: API Client Generation', () => {
               parameters: [
                 {
                   name: 'id',
-                  in: 'path',
+                  in: 'path' as const,
                   description: 'Pet ID',
                   required: true,
                   schema: {
@@ -208,7 +208,7 @@ describe('E2E: API Client Generation', () => {
               parameters: [
                 {
                   name: 'id',
-                  in: 'path',
+                  in: 'path' as const,
                   required: true,
                   schema: { type: 'string' },
                 },
@@ -364,7 +364,7 @@ describe('E2E: API Client Generation', () => {
               parameters: [
                 {
                   name: 'id',
-                  in: 'path',
+                  in: 'path' as const,
                   required: true,
                   schema: { type: 'string' },
                 },

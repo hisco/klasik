@@ -136,10 +136,9 @@ describe('name-utils', () => {
     });
 
     it('should handle already PascalCase', () => {
-      // When already PascalCase, it will lowercase everything except first letter
-      // because split on [-_] treats it as one word
-      expect(toPascalCase('UserProfile')).toBe('Userprofile');
-      expect(toPascalCase('MyClass')).toBe('Myclass');
+      // When already PascalCase, it should preserve the casing
+      expect(toPascalCase('UserProfile')).toBe('UserProfile');
+      expect(toPascalCase('MyClass')).toBe('MyClass');
     });
 
     it('should handle consecutive delimiters', () => {
@@ -212,9 +211,9 @@ describe('name-utils', () => {
     });
 
     it('should handle already camelCase', () => {
-      // When already camelCase, split on [-_] treats as one word
-      expect(toCamelCase('userProfile')).toBe('userprofile');
-      expect(toCamelCase('myClass')).toBe('myclass');
+      // When already camelCase, it should preserve the casing
+      expect(toCamelCase('userProfile')).toBe('userProfile');
+      expect(toCamelCase('myClass')).toBe('myClass');
     });
   });
 

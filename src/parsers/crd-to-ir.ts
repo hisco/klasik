@@ -68,9 +68,19 @@ export class CRDToIRConverter {
       const mainSchemaName = this.getSchemaName(crd.metadata.kind, versionName);
       this.convertSchema(schema, mainSchemaName, crd, true); // true = top-level schema
 
-      // If schema has ObjectMeta, create it
-      if (schema.properties?.metadata) {
+      // If schema has metadata field with type: object (standard K8s metadata),
+      // create ObjectMeta schema and link the metadata property to it
+      if (schema.properties?.metadata?.type === 'object' && !schema.properties?.metadata?.properties) {
         this.createObjectMetaSchema();
+
+        // Update the metadata property to reference ObjectMeta
+        const mainSchema = this.ir.schemas.get(mainSchemaName);
+        if (mainSchema) {
+          const metadataProp = mainSchema.properties.get('metadata');
+          if (metadataProp) {
+            metadataProp.type = IRHelpers.createTypeReference('reference', 'ObjectMeta');
+          }
+        }
       }
     }
   }
