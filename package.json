@@ -1,6 +1,6 @@
 {
   "name": "klasik",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "TypeScript code generator from OpenAPI/CRD/JSON Schema/Go structs - rebuilt from ground up with AST-based generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -46,6 +46,7 @@
     "js-yaml": "^4.1.0",
     "mustache": "^4.2.0",
     "ora": "^5.4.1",
+    "swagger2openapi": "^7.0.8",
     "ts-morph": "^21.0.0"
   },
   "devDependencies": {

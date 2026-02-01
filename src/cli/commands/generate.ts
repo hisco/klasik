@@ -8,6 +8,7 @@ import { Command } from 'commander';
 import { Generator } from '../../generator/generator';
 import { OpenAPIParser } from '../../parsers/openapi-parser';
 import { SpecLoader } from '../../loaders/spec-loader';
+import { SwaggerConverter } from '../../converters/swagger-converter';
 import { Logger } from '../utils/logger';
 import ora from 'ora';
 import {
@@ -67,9 +68,9 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
     Logger.debug(`Headers: ${JSON.stringify(headers)}`);
 
     // Load spec
-    spinner.text = 'Loading OpenAPI specification...';
+    spinner.text = 'Loading specification...';
     const loader = new SpecLoader();
-    const spec = options.resolveRefs
+    let spec = options.resolveRefs
       ? await loader.loadWithRefs({
           url: options.url,
           headers,
@@ -88,6 +89,14 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
         });
 
     Logger.debug(`Loaded spec from ${options.url}`);
+
+    // Convert Swagger 2.0 to OpenAPI 3.0 if needed
+    if (SwaggerConverter.isSwagger2(spec)) {
+      spinner.text = 'Converting Swagger 2.0 to OpenAPI 3.0...';
+      const swaggerConverter = new SwaggerConverter();
+      spec = await swaggerConverter.convert(spec);
+      Logger.debug('Successfully converted Swagger 2.0 to OpenAPI 3.0');
+    }
 
     // Parse OpenAPI
     spinner.text = 'Parsing OpenAPI specification...';

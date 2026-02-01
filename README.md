@@ -17,7 +17,7 @@ Perfect for:
 ✅ **class-validator** - Built-in validation decorators
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
-📦 **Multiple Formats** - OpenAPI, Kubernetes CRDs, JSON Schema, Go structs
+📦 **Multiple Formats** - OpenAPI 3.x, Swagger 2.0, Kubernetes CRDs, JSON Schema, Go structs
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
 🔗 **External $refs** - Automatic resolution of external schemas
 🎭 **Custom Templates** - Mustache-based customization
@@ -40,10 +40,16 @@ npx klasik <command>
 
 ### CLI Usage
 
-Generate from OpenAPI spec:
+Generate from OpenAPI 3.x spec:
 
 ```bash
 klasik generate --url https://api.example.com/openapi.json --output ./src/generated
+```
+
+Generate from Swagger 2.0 spec (auto-converted to OpenAPI 3.0):
+
+```bash
+klasik generate --url https://petstore.swagger.io/v2/swagger.json --output ./src/generated
 ```
 
 Generate from Kubernetes CRDs:
@@ -666,6 +672,10 @@ validate(data);
 ### `klasik generate`
 
 Generate TypeScript client from OpenAPI specification.
+
+**Supported formats:**
+- OpenAPI 3.x (native)
+- Swagger 2.0 (automatically converted to OpenAPI 3.0)
 
 **Usage:**
 

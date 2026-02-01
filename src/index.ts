@@ -22,6 +22,13 @@ export { SpecLoader, SpecLoaderOptions, LoadWithRefsOptions } from './loaders/sp
 export { RefResolver, RefResolverOptions, RefResolverError } from './loaders/ref-resolver';
 export { RefInliner, RefInlinerOptions, RefInlinerError } from './loaders/ref-inliner';
 
+// Converters
+export {
+  SwaggerConverter,
+  SwaggerConverterOptions,
+  SwaggerConversionError,
+} from './converters/swagger-converter';
+
 // Builders
 export { ClassBuilder } from './builders/class-builder';
 export { ImportManager } from './builders/import-manager';
