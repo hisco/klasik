@@ -16,6 +16,7 @@ Perfect for:
 🔄 **class-transformer** - Automatic serialization/deserialization
 ✅ **class-validator** - Built-in validation decorators
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
+🛡️ **Zod Schemas** - Generate Zod validation schemas for runtime type safety
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
 📦 **Multiple Formats** - OpenAPI 3.x, Swagger 2.0 (auto-converted), Kubernetes CRDs, JSON Schema, Go structs
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
@@ -23,7 +24,7 @@ Perfect for:
 🎭 **Custom Templates** - Mustache-based customization
 ⚙️ **Flexible Output** - Multiple export styles (namespace, direct, both)
 🌐 **HTTP Client Choice** - Generate with Axios (default) or native Fetch API
-🧪 **Well Tested** - Comprehensive test coverage (1039+ passing tests)
+🧪 **Well Tested** - Comprehensive test coverage (1073+ passing tests)
 🚀 **Production Ready** - Used in real-world projects
 📝 **Full CLI** - Rich command-line interface with 4 commands
 🔐 **Authentication** - Custom headers including Bearer tokens
@@ -668,6 +669,257 @@ validate(data);
 - Custom validation workflows
 - Schema introspection
 
+## Zod Schema Generation
+
+Klasik can generate Zod validation schemas alongside your TypeScript models. Zod provides powerful runtime type validation with excellent TypeScript integration and a modern API.
+
+### Why Zod Validation?
+
+**Advantages:**
+- ✅ **TypeScript-first** - Excellent type inference with `z.infer<typeof Schema>`
+- ✅ **Modern API** - Fluent, chainable validation methods
+- ✅ **Lightweight** - Small bundle size (~12kb gzipped)
+- ✅ **Composable** - Easy to extend and combine schemas
+- ✅ **Parse, don't validate** - Returns typed, validated data
+- ✅ **No decorators** - Works with plain objects, no class instances needed
+
+**When to use:**
+- Frontend applications with React, Vue, or Svelte
+- API request/response validation
+- Form validation
+- Configuration file validation
+- Projects preferring functional over decorator-based approach
+
+### Basic Usage
+
+Enable with the `--use-zod` flag:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./generated \
+  --use-zod
+```
+
+### Generated Code Structure
+
+For each model, Klasik generates a separate `.zod.ts` file:
+
+```
+models/
+├── user.ts           # Class with decorators
+├── user.zod.ts       # Zod schema
+├── address.ts
+├── address.zod.ts
+├── index.ts          # Class exports
+└── index.zod.ts      # Zod schema exports
+```
+
+**Example generated Zod file (`user.zod.ts`):**
+
+```typescript
+import { z } from 'zod';
+
+/**
+ * User schema
+ */
+export const UserSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  age: z.number().int().min(0).max(150).optional(),
+  role: z.enum(['admin', 'user', 'guest']).optional(),
+});
+
+export type User = z.infer<typeof UserSchema>;
+```
+
+### Using Zod Schemas
+
+**Validate data:**
+
+```typescript
+import { UserSchema } from './generated/models/user.zod';
+
+const result = UserSchema.safeParse({
+  id: '123e4567-e89b-12d3-a456-426614174000',
+  name: 'John Doe',
+  email: 'john@example.com',
+});
+
+if (result.success) {
+  console.log('Valid user:', result.data);
+  // result.data is fully typed as User
+} else {
+  console.error('Validation errors:', result.error.issues);
+}
+```
+
+**Parse with error throwing:**
+
+```typescript
+try {
+  const user = UserSchema.parse(data);
+  // user is fully typed
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    console.error('Validation failed:', error.issues);
+  }
+}
+```
+
+### Type Mapping
+
+| OpenAPI/IR Type | Zod Output |
+|-----------------|------------|
+| `string` | `z.string()` |
+| `number` | `z.number()` |
+| `integer` | `z.number().int()` |
+| `boolean` | `z.boolean()` |
+| `array` | `z.array(elementSchema)` |
+| `object` | `z.object({...})` |
+| `enum` | `z.enum([...values])` |
+| `union` | `z.union([...])` |
+| `dictionary` | `z.record(z.string(), valueSchema)` |
+| `unknown` | `z.unknown()` |
+
+### Format Validations
+
+| Format | Zod Method |
+|--------|------------|
+| `email` | `.email()` |
+| `url` / `uri` | `.url()` |
+| `uuid` | `.uuid()` |
+| `date-time` | `.datetime()` |
+| `date` | `.date()` |
+| `ipv4` | `.ip({ version: 'v4' })` |
+| `ipv6` | `.ip({ version: 'v6' })` |
+
+### Constraint Validations
+
+| Constraint | Zod Method |
+|------------|------------|
+| `minLength` | `.min(length)` |
+| `maxLength` | `.max(length)` |
+| `pattern` | `.regex(pattern)` |
+| `minimum` | `.min(value)` or `.gte(value)` |
+| `maximum` | `.max(value)` or `.lte(value)` |
+| `exclusiveMinimum` | `.gt(value)` |
+| `exclusiveMaximum` | `.lt(value)` |
+| `minItems` | `.min(length)` on array |
+| `maxItems` | `.max(length)` on array |
+
+### Optional and Nullable Handling
+
+| Property | Zod Output |
+|----------|------------|
+| Optional (not required) | `.optional()` |
+| Nullable | `.nullable()` |
+| Both optional and nullable | `.nullish()` |
+
+### Reference Handling
+
+Zod schemas import and use referenced types directly:
+
+```typescript
+// address.zod.ts
+import { z } from 'zod';
+
+export const AddressSchema = z.object({
+  street: z.string(),
+  city: z.string(),
+  zipCode: z.string(),
+});
+
+// user.zod.ts
+import { z } from 'zod';
+import { AddressSchema } from './address.zod';
+
+export const UserSchema = z.object({
+  name: z.string(),
+  homeAddress: AddressSchema,
+  workAddress: AddressSchema.optional(),
+});
+```
+
+### Combining with Class-based Models
+
+You can use both class-based models and Zod schemas together:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./generated \
+  --class-validator \
+  --use-zod
+```
+
+**Use case:** Use class-based models with decorators for NestJS backend validation, and Zod schemas for frontend form validation.
+
+### Dependencies
+
+When using `--use-zod`, the following dependency is automatically added to `package.json`:
+
+```json
+{
+  "dependencies": {
+    "zod": "^3.23.0"
+  }
+}
+```
+
+Install it in your project:
+
+```bash
+cd generated
+npm install
+```
+
+### Complete Example
+
+```bash
+# Generate models with Zod validation
+klasik generate-jsonschema \
+  --url ./schemas/user.json \
+  --output ./src/models \
+  --use-zod
+
+# Use in your code
+cat > example.ts << 'EOF'
+import { UserSchema, User } from './src/models/user.zod';
+
+// Valid user
+const validResult = UserSchema.safeParse({
+  name: 'Alice Smith',
+  email: 'alice@example.com',
+  age: 30
+});
+
+if (validResult.success) {
+  const user: User = validResult.data;
+  console.log('Valid user:', user.name);
+}
+
+// Invalid user
+const invalidResult = UserSchema.safeParse({
+  name: '',
+  email: 'invalid-email',
+  age: -5
+});
+
+if (!invalidResult.success) {
+  console.log('Errors:', invalidResult.error.issues);
+  // [
+  //   { path: ['name'], message: 'String must contain at least 1 character(s)' },
+  //   { path: ['email'], message: 'Invalid email' },
+  //   { path: ['age'], message: 'Number must be greater than or equal to 0' }
+  // ]
+}
+EOF
+
+npx ts-node example.ts
+```
+
 ## CLI Commands
 
 ### `klasik generate`
@@ -718,6 +970,7 @@ klasik generate [options]
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
+| `--use-zod` | Generate Zod validation schemas | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--timeout <ms>` | Request timeout | `30000` |
 | `--template <dir>` | Custom template directory | - |
@@ -851,6 +1104,7 @@ klasik generate-crd [options]
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
+| `--use-zod` | Generate Zod validation schemas | `false` |
 | `--esm` | Add .js extensions for ESM | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--resolve-refs` | Resolve external $ref files | `false` |
@@ -922,6 +1176,7 @@ klasik generate-jsonschema [options]
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
+| `--use-zod` | Generate Zod validation schemas | `false` |
 | `--esm` | Add .js extensions for ESM | `false` |
 | `--header <header>` | Custom header (repeatable) | - |
 | `--resolve-refs` | Resolve external $ref files | `false` |
@@ -977,6 +1232,7 @@ klasik generate-go [options]
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
+| `--use-zod` | Generate Zod validation schemas | `false` |
 | `--esm` | Add .js extensions for ESM | `false` |
 | `--template <dir>` | Custom template directory | - |
 | `--export-style <style>` | Export style: `namespace`, `direct`, `both`, `none` | `namespace` |
@@ -1785,6 +2041,7 @@ Built with:
 - [class-validator](https://github.com/typestack/class-validator) - Runtime validation
 - [ajv](https://github.com/ajv-validator/ajv) - JSON Schema validator
 - [ajv-formats](https://github.com/ajv-validator/ajv-formats) - Format validation for Ajv
+- [zod](https://github.com/colinhacks/zod) - TypeScript-first schema validation
 - [swagger2openapi](https://github.com/Mermade/oas-kit/tree/main/packages/swagger2openapi) - Swagger 2.0 to OpenAPI 3.0 conversion
 - [mustache](https://github.com/janl/mustache.js) - Template engine
 - [commander](https://github.com/tj/commander.js) - CLI framework

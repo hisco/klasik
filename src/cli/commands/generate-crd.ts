@@ -22,6 +22,7 @@ import {
   nestjsSwaggerOption,
   classValidatorOption,
   useAjvOption,
+  useZodOption,
   templateOption,
   keepSpecOption,
   crdKindCaseOption,
@@ -43,6 +44,7 @@ export interface GenerateCrdOptions {
   nestjsSwagger?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
+  useZod?: boolean;
   esm?: boolean;
   header?: string[];
   resolveRefs?: boolean;
@@ -199,6 +201,7 @@ export async function generateCrdAction(options: GenerateCrdOptions): Promise<vo
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
+      useZod: options.useZod,
       crdKindCase: options.crdKindCase,
       exportStyle: options.exportStyle,
       bare: options.bare,
@@ -230,6 +233,7 @@ export const generateCrdCommand = new Command('generate-crd')
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
+  .addOption(useZodOption())
   .addOption(esmOption())
   .addOption(headerOption())
   .addOption(resolveRefsOption())

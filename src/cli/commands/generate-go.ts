@@ -17,6 +17,7 @@ import {
   nestjsSwaggerOption,
   classValidatorOption,
   useAjvOption,
+  useZodOption,
   templateOption,
   exportStyleOption,
   bareOption,
@@ -31,6 +32,7 @@ export interface GenerateGoOptions {
   nestjsSwagger?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
+  useZod?: boolean;
   esm?: boolean;
   template?: string;
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
@@ -142,6 +144,7 @@ export async function generateGoAction(options: GenerateGoOptions): Promise<void
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
+      useZod: options.useZod,
       exportStyle: options.exportStyle,
       bare: options.bare,
       templateDir: options.template,
@@ -170,6 +173,7 @@ export const generateGoCommand = new Command('generate-go')
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
+  .addOption(useZodOption())
   .addOption(esmOption())
   .addOption(templateOption())
   .addOption(exportStyleOption())

@@ -77,6 +77,13 @@ export function useAjvOption(): Option {
 }
 
 /**
+ * Zod schema option builder
+ */
+export function useZodOption(): Option {
+  return new Option('--use-zod', 'Generate Zod validation schemas').default(false);
+}
+
+/**
  * Template directory option builder
  */
 export function templateOption(): Option {

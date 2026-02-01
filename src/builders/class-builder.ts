@@ -39,6 +39,7 @@ export interface GeneratorOptions {
   nestJsSwagger?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
+  useZod?: boolean;
   crdKindCase?: 'kebab' | 'snake' | 'pascal' | 'camel' | 'none';
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   templateDir?: string;

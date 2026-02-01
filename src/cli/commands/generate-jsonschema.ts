@@ -21,6 +21,7 @@ import {
   nestjsSwaggerOption,
   classValidatorOption,
   useAjvOption,
+  useZodOption,
   templateOption,
   keepSpecOption,
   exportStyleOption,
@@ -37,6 +38,7 @@ export interface GenerateJsonSchemaOptions {
   nestjsSwagger?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
+  useZod?: boolean;
   esm?: boolean;
   header?: string[];
   resolveRefs?: boolean;
@@ -174,6 +176,7 @@ export async function generateJsonSchemaAction(options: GenerateJsonSchemaOption
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
+      useZod: options.useZod,
       exportStyle: options.exportStyle,
       bare: options.bare,
       templateDir: options.template,
@@ -202,6 +205,7 @@ export const generateJsonSchemaCommand = new Command('generate-jsonschema')
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
+  .addOption(useZodOption())
   .addOption(esmOption())
   .addOption(headerOption())
   .addOption(resolveRefsOption())

@@ -20,6 +20,7 @@ import {
   nestjsSwaggerOption,
   classValidatorOption,
   useAjvOption,
+  useZodOption,
   templateOption,
   keepSpecOption,
   resolveRefsOption,
@@ -43,6 +44,7 @@ export interface GenerateOptions {
   nestjsSwagger?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
+  useZod?: boolean;
   template?: string;
   keepSpec?: boolean;
   timeout?: number;
@@ -127,6 +129,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       nestJsSwagger: options.nestjsSwagger,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
+      useZod: options.useZod,
       exportStyle: options.exportStyle,
       bare: options.bare,
       mode: options.mode,
@@ -163,6 +166,7 @@ export const generateCommand = new Command('generate')
   .addOption(nestjsSwaggerOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
+  .addOption(useZodOption())
   .addOption(templateOption())
   .addOption(keepSpecOption())
   .addOption(timeoutOption())

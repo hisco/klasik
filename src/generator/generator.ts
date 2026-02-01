@@ -18,6 +18,7 @@ import { ClassTransformerPlugin } from '../plugins/class-transformer-plugin';
 import { NestJSSwaggerPlugin } from '../plugins/nestjs-swagger-plugin';
 import { ClassValidatorPlugin } from '../plugins/class-validator-plugin';
 import { AjvValidatorPlugin } from '../plugins/ajv-validator-plugin';
+import { ZodValidatorPlugin } from '../plugins/zod-validator-plugin';
 import { toKebabCase, toSnakeCase, toPascalCase, toCamelCase } from '../utils/name-utils';
 import { ExportStyleManager } from './export-style-manager';
 
@@ -396,6 +397,10 @@ export class Generator {
 
     if (this.options.useAjv) {
       this.pluginRegistry.register(new AjvValidatorPlugin());
+    }
+
+    if (this.options.useZod) {
+      this.pluginRegistry.register(new ZodValidatorPlugin());
     }
   }
 
