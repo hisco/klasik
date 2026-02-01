@@ -129,6 +129,9 @@ export interface PropertyDefinition {
 
   /** Property-level metadata */
   metadata: PropertyMetadata;
+
+  /** Original schema object (for inline schema extraction) */
+  originalSchema?: any;
 }
 
 /**

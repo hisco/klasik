@@ -146,10 +146,13 @@ export class OpenAPIParser {
     // Parse metadata
     this.parseMetadata();
 
-    // Parse schemas
+    // Phase 1: Parse schemas
     if (spec.components?.schemas) {
       this.parseSchemas(spec.components.schemas);
     }
+
+    // Phase 2: Extract nested inline schemas
+    this.extractNestedSchemas();
 
     // Parse operations if requested
     if (options.includeOperations && spec.paths) {
@@ -180,6 +183,87 @@ export class OpenAPIParser {
       const schemaDef = this.parseSchemaDefinition(name, schema);
       this.ir.schemas.set(name, schemaDef);
     }
+  }
+
+  /**
+   * Extract nested inline object schemas into separate schema definitions
+   * This is Phase 2 of parsing - runs after all schemas are initially parsed
+   */
+  private extractNestedSchemas(): void {
+    // Process existing schemas and collect new ones to add
+    const schemaNames = Array.from(this.ir.schemas.keys());
+
+    for (const schemaName of schemaNames) {
+      const schema = this.ir.schemas.get(schemaName)!;
+      this.extractFromSchema(schema, schemaName);
+    }
+  }
+
+  /**
+   * Extract inline objects from a schema's properties
+   */
+  private extractFromSchema(schema: SchemaDefinition, parentName: string): void {
+    for (const [propName, prop] of schema.properties) {
+      this.extractFromProperty(prop, parentName, propName);
+    }
+  }
+
+  /**
+   * Extract inline objects from a single property
+   */
+  private extractFromProperty(
+    prop: PropertyDefinition,
+    parentName: string,
+    propName: string
+  ): void {
+    const originalSchema = prop.originalSchema as SchemaObject | undefined;
+    if (!originalSchema) return;
+
+    // Case 1: Inline object with properties
+    if (originalSchema.type === 'object' && originalSchema.properties) {
+      const nestedName = this.getNestedSchemaName(parentName, propName);
+
+      // Parse and register the nested schema
+      const nestedSchema = this.parseObjectSchema(nestedName, originalSchema);
+      this.ir.schemas.set(nestedName, nestedSchema);
+
+      // Update property type to reference the new schema
+      prop.type = IRHelpers.createReferenceType(nestedName);
+
+      // Recursively extract from the new schema
+      this.extractFromSchema(nestedSchema, nestedName);
+    }
+
+    // Case 2: Array of inline objects
+    if (
+      originalSchema.type === 'array' &&
+      originalSchema.items?.type === 'object' &&
+      originalSchema.items?.properties
+    ) {
+      const nestedName = this.getNestedSchemaName(parentName, propName);
+
+      // Parse and register the nested schema
+      const nestedSchema = this.parseObjectSchema(nestedName, originalSchema.items);
+      this.ir.schemas.set(nestedName, nestedSchema);
+
+      // Update property type to array of reference
+      prop.type = IRHelpers.createArrayType(IRHelpers.createReferenceType(nestedName));
+
+      // Recursively extract from the new schema
+      this.extractFromSchema(nestedSchema, nestedName);
+    }
+  }
+
+  /**
+   * Generate name for nested schema
+   */
+  private getNestedSchemaName(parentName: string, propName: string): string {
+    // Convert property name to PascalCase, handling hyphens and underscores
+    const capitalizedProp = propName
+      .split(/[-_]/)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join('');
+    return `${parentName}${capitalizedProp}`;
   }
 
   /**
@@ -306,6 +390,7 @@ export class OpenAPIParser {
         writeOnly: schema.writeOnly,
         vendorExtensions: this.extractVendorExtensions(schema),
       },
+      originalSchema: schema,
     };
   }
 
