@@ -222,11 +222,27 @@ describe('E2E: OpenCost Swagger Generation', () => {
   it('should compile generated TypeScript without errors', async () => {
     console.log('\n🔨 Installing dependencies and compiling TypeScript...\n');
 
+    // Use a dedicated directory for this test to avoid interference with other tests
+    const compileTestDir = path.join(TEST_OUTPUT_DIR, 'compile-test');
+    await ensureCleanDirectory(compileTestDir);
+
     try {
+      // Generate models first (self-contained test)
+      console.log('   Generating models...');
+      execSync(
+        `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${compileTestDir}" --nestjs-swagger --class-validator`,
+        {
+          encoding: 'utf-8',
+          timeout: 60000,
+          cwd: path.join(__dirname, '../..')
+        }
+      );
+      console.log('   ✓ Models generated\n');
+
       // Install dependencies
       console.log('   Installing npm dependencies...');
       execSync('npm install --silent', {
-        cwd: TEST_OUTPUT_DIR,
+        cwd: compileTestDir,
         stdio: 'pipe',
         timeout: 120000
       });
@@ -235,7 +251,7 @@ describe('E2E: OpenCost Swagger Generation', () => {
       // Compile TypeScript
       console.log('   Compiling TypeScript...');
       const compileResult = execSync('npx tsc --noEmit 2>&1', {
-        cwd: TEST_OUTPUT_DIR,
+        cwd: compileTestDir,
         encoding: 'utf-8',
         timeout: 60000
       });
@@ -295,4 +311,250 @@ describe('E2E: OpenCost Swagger Generation', () => {
       throw error;
     }
   }, 120000);
+
+  describe('--rename-model feature', () => {
+    it('should rename models via CLI --rename-model flag', async () => {
+      console.log('\n🔄 Testing --rename-model feature...\n');
+
+      const renameOutputDir = path.join(TEST_OUTPUT_DIR, 'renamed');
+      await ensureCleanDirectory(renameOutputDir);
+
+      try {
+        const result = execSync(
+          `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${renameOutputDir}" ` +
+          `--rename-model "inline_response_200:AllocationResponse"`,
+          {
+            encoding: 'utf-8',
+            timeout: 60000,
+            cwd: path.join(__dirname, '../..')
+          }
+        );
+
+        console.log('   CLI output:', result);
+
+        const modelsPath = path.join(renameOutputDir, 'models');
+        const files = fs.readdirSync(modelsPath).filter(f => f.endsWith('.ts') && f !== 'index.ts');
+
+        console.log('   Generated model files:');
+        for (const file of files) {
+          console.log(`      - ${file}`);
+        }
+
+        // Verify OLD files do NOT exist
+        expect(fs.existsSync(path.join(modelsPath, 'inline_response_200.ts'))).toBe(false);
+
+        // Verify NEW files exist
+        expect(fs.existsSync(path.join(modelsPath, 'allocation-response.ts'))).toBe(true);
+
+        // Verify class names are renamed
+        const content = fs.readFileSync(
+          path.join(modelsPath, 'allocation-response.ts'),
+          'utf-8'
+        );
+        expect(content).toContain('export class AllocationResponse');
+        expect(content).not.toContain('inline_response_200');
+
+        console.log('   ✅ Model renamed successfully');
+      } catch (error: any) {
+        console.log('   CLI error:', error.message);
+        throw error;
+      }
+    }, 120000);
+
+    it('should handle partial match renaming', async () => {
+      console.log('\n🔄 Testing partial match renaming...\n');
+
+      const partialRenameDir = path.join(TEST_OUTPUT_DIR, 'partial-rename');
+      await ensureCleanDirectory(partialRenameDir);
+
+      try {
+        // Rename all "inline_response_200" prefix to "Allocation"
+        const result = execSync(
+          `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${partialRenameDir}" ` +
+          `--rename-model "inline_response_200:Allocation"`,
+          {
+            encoding: 'utf-8',
+            timeout: 60000,
+            cwd: path.join(__dirname, '../..')
+          }
+        );
+
+        console.log('   CLI output:', result);
+
+        const modelsPath = path.join(partialRenameDir, 'models');
+        const files = fs.readdirSync(modelsPath).filter(f => f.endsWith('.ts') && f !== 'index.ts');
+
+        console.log('   Generated model files:');
+        for (const file of files) {
+          console.log(`      - ${file}`);
+        }
+
+        // All inline_response_200* files should now be allocation*
+        // There should be no files starting with 'inline'
+        const hasInlineFiles = files.some(f => f.startsWith('inline'));
+        expect(hasInlineFiles).toBe(false);
+
+        // Should have allocation files instead
+        const hasAllocationFiles = files.some(f => f.startsWith('allocation'));
+        expect(hasAllocationFiles).toBe(true);
+
+        console.log('   ✅ Partial match renaming successful');
+      } catch (error: any) {
+        console.log('   CLI error:', error.message);
+        throw error;
+      }
+    }, 120000);
+
+    it('should update type references after rename', async () => {
+      console.log('\n🔄 Testing type reference updates after rename...\n');
+
+      const refRenameDir = path.join(TEST_OUTPUT_DIR, 'ref-rename');
+      await ensureCleanDirectory(refRenameDir);
+
+      try {
+        // Rename inline_response_200 to AllocationResponse (partial match renames all related schemas)
+        const result = execSync(
+          `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${refRenameDir}" ` +
+          `--rename-model "inline_response_200:AllocationResponse"`,
+          {
+            encoding: 'utf-8',
+            timeout: 60000,
+            cwd: path.join(__dirname, '../..')
+          }
+        );
+
+        console.log('   CLI output:', result);
+
+        const modelsPath = path.join(refRenameDir, 'models');
+        const files = fs.readdirSync(modelsPath).filter(f => f.endsWith('.ts') && f !== 'index.ts');
+
+        console.log('   Generated model files:');
+        for (const file of files) {
+          console.log(`      - ${file}`);
+        }
+
+        // Check the parent schema references the renamed child types
+        const responseContent = fs.readFileSync(
+          path.join(modelsPath, 'allocation-response.ts'),
+          'utf-8'
+        );
+
+        // Should reference AllocationResponseData (renamed), not inline_response_200Data
+        const hasOldReference = responseContent.includes('inline_response_200');
+        const hasNewReference = responseContent.includes('AllocationResponseData');
+
+        console.log(`   Old reference present: ${hasOldReference}`);
+        console.log(`   New reference present: ${hasNewReference}`);
+
+        expect(hasNewReference).toBe(true);
+        expect(hasOldReference).toBe(false);
+
+        console.log('   ✅ Type references updated correctly');
+      } catch (error: any) {
+        console.log('   CLI error:', error.message);
+        throw error;
+      }
+    }, 120000);
+
+    it('should compile TypeScript after rename', async () => {
+      console.log('\n🔨 Testing TypeScript compilation after rename...\n');
+
+      const compileRenameDir = path.join(TEST_OUTPUT_DIR, 'compile-rename');
+      await ensureCleanDirectory(compileRenameDir);
+
+      try {
+        // Generate with rename
+        execSync(
+          `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${compileRenameDir}" ` +
+          `--rename-model "inline_response_200:AllocationResponse"`,
+          {
+            encoding: 'utf-8',
+            timeout: 60000,
+            cwd: path.join(__dirname, '../..')
+          }
+        );
+
+        // Install dependencies
+        console.log('   Installing dependencies...');
+        execSync('npm install --silent', {
+          cwd: compileRenameDir,
+          stdio: 'pipe',
+          timeout: 120000
+        });
+
+        // Compile TypeScript
+        console.log('   Compiling TypeScript...');
+        const compileResult = execSync('npx tsc --noEmit 2>&1', {
+          cwd: compileRenameDir,
+          encoding: 'utf-8',
+          timeout: 60000
+        });
+
+        const hasFatalErrors = compileResult.includes('error TS');
+
+        if (!hasFatalErrors) {
+          console.log('   ✅ Compilation succeeded after rename\n');
+        } else {
+          console.log('   ❌ Compilation failed with errors:');
+          console.log(compileResult);
+        }
+
+        expect(hasFatalErrors).toBe(false);
+      } catch (error: any) {
+        const output = error.stdout || error.stderr || error.message;
+        console.log('\n   ❌ TypeScript compilation failed after rename');
+        console.log('   Error output:');
+        console.log(output);
+
+        if (output && output.includes('error TS')) {
+          throw new Error(`TypeScript compilation errors:\n${output}`);
+        }
+        throw error;
+      }
+    }, 180000);
+
+    it('should support multiple --rename-model flags', async () => {
+      console.log('\n🔄 Testing multiple --rename-model flags...\n');
+
+      const multiRenameDir = path.join(TEST_OUTPUT_DIR, 'multi-rename');
+      await ensureCleanDirectory(multiRenameDir);
+
+      try {
+        // Multiple renames - put more specific patterns FIRST to avoid partial match conflicts
+        // "inline_response_200Data" is more specific than "inline_response_200"
+        const result = execSync(
+          `node dist/cli/index.js generate --url "${SWAGGER_URL}" --output "${multiRenameDir}" ` +
+          `--rename-model "inline_response_200Data:AllocationData" ` +
+          `--rename-model "inline_response_200:AllocationResponse"`,
+          {
+            encoding: 'utf-8',
+            timeout: 60000,
+            cwd: path.join(__dirname, '../..')
+          }
+        );
+
+        console.log('   CLI output:', result);
+
+        const modelsPath = path.join(multiRenameDir, 'models');
+        const files = fs.readdirSync(modelsPath).filter(f => f.endsWith('.ts') && f !== 'index.ts');
+
+        console.log('   Generated model files:');
+        for (const file of files) {
+          console.log(`      - ${file}`);
+        }
+
+        // Both renames should have been applied
+        expect(fs.existsSync(path.join(modelsPath, 'allocation-response.ts'))).toBe(true);
+        expect(fs.existsSync(path.join(modelsPath, 'allocation-data.ts'))).toBe(true);
+
+        // Old files should not exist
+        expect(fs.existsSync(path.join(modelsPath, 'inline_response_200.ts'))).toBe(false);
+
+        console.log('   ✅ Multiple renames applied successfully');
+      } catch (error: any) {
+        console.log('   CLI error:', error.message);
+        throw error;
+      }
+    }, 120000);
+  });
 });

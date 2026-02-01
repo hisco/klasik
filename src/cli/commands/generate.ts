@@ -29,9 +29,12 @@ import {
   bareOption,
   httpClientOption,
   cleanOption,
+  renameModelOption,
   parseHeaders,
   collectValues,
+  parseRenameModelValues,
 } from '../utils/options';
+import { renameSchemas } from '../../utils/ir-renamer';
 import * as fs from 'fs';
 
 export interface GenerateOptions {
@@ -53,6 +56,7 @@ export interface GenerateOptions {
   bare?: boolean;
   httpClient?: 'axios' | 'fetch';
   clean?: boolean;
+  renameModel?: string[];
 }
 
 export async function generateAction(options: GenerateOptions): Promise<void> {
@@ -115,11 +119,24 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
     // Parse OpenAPI
     spinner.text = 'Parsing OpenAPI specification...';
     const parser = new OpenAPIParser();
-    const ir = parser.parse(spec, {
+    let ir = parser.parse(spec, {
       includeOperations: options.mode === 'full',
     });
 
     Logger.debug(`Parsed ${ir.schemas.size} schema(s), ${ir.operations.size} operation(s)`);
+
+    // Apply schema renames if specified
+    if (options.renameModel && options.renameModel.length > 0) {
+      spinner.text = 'Applying model renames...';
+      const mappings = parseRenameModelValues(options.renameModel);
+      const renameResult = renameSchemas(ir, mappings);
+      ir = renameResult.ir;
+      if (renameResult.stats.schemasRenamed > 0) {
+        Logger.debug(
+          `Renamed ${renameResult.stats.schemasRenamed} schema(s), updated ${renameResult.stats.referencesUpdated} reference(s)`
+        );
+      }
+    }
 
     // Generate code
     spinner.text = 'Generating TypeScript code...';
@@ -175,4 +192,5 @@ export const generateCommand = new Command('generate')
   .addOption(skipJsExtensionsOption())
   .addOption(httpClientOption())
   .addOption(cleanOption())
+  .addOption(renameModelOption())
   .action(generateAction);

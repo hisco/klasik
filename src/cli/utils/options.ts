@@ -236,3 +236,54 @@ export function validateTimeout(value: string): number {
 
   return parsed;
 }
+
+/**
+ * Rename model option builder (repeatable)
+ * Format: "original:replacement" for partial or exact match renaming
+ */
+export function renameModelOption(): Option {
+  return new Option(
+    '--rename-model <mapping>',
+    'Rename model: "original:new" or partial match "inline_response:Response" (repeatable)'
+  ).argParser(collectValues).default([]);
+}
+
+/**
+ * Parse rename model option values
+ * Format: "original:replacement"
+ * Returns array of { pattern: string, replacement: string }
+ */
+export function parseRenameModelValues(
+  values: string[]
+): Array<{ pattern: string; replacement: string }> {
+  const result: Array<{ pattern: string; replacement: string }> = [];
+
+  for (const value of values) {
+    const colonIndex = value.indexOf(':');
+
+    if (colonIndex === -1) {
+      throw new Error(
+        `Invalid rename format: "${value}". Expected format: "original:replacement"`
+      );
+    }
+
+    const pattern = value.substring(0, colonIndex).trim();
+    const replacement = value.substring(colonIndex + 1).trim();
+
+    if (!pattern) {
+      throw new Error(
+        `Invalid rename format: "${value}". Pattern cannot be empty`
+      );
+    }
+
+    if (!replacement) {
+      throw new Error(
+        `Invalid rename format: "${value}". Replacement cannot be empty`
+      );
+    }
+
+    result.push({ pattern, replacement });
+  }
+
+  return result;
+}
