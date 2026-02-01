@@ -121,6 +121,15 @@ export function bareOption(): Option {
 }
 
 /**
+ * HTTP client option builder
+ */
+export function httpClientOption(): Option {
+  return new Option('--http-client <client>', 'HTTP client to use for API requests')
+    .choices(['axios', 'fetch'])
+    .default('axios');
+}
+
+/**
  * CRD kind case option builder
  */
 export function crdKindCaseOption(): Option {

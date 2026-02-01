@@ -500,9 +500,11 @@ export class OpenAPIParser {
   private parseRequestBody(body: RequestBodyObject): RequestBodyDefinition {
     const content = new Map<string, TypeReference>();
 
-    for (const [contentType, mediaType] of Object.entries(body.content)) {
-      if (mediaType.schema) {
-        content.set(contentType, this.parseType(mediaType.schema));
+    if (body.content) {
+      for (const [contentType, mediaType] of Object.entries(body.content)) {
+        if (mediaType.schema) {
+          content.set(contentType, this.parseType(mediaType.schema));
+        }
       }
     }
 

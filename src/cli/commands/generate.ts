@@ -26,6 +26,7 @@ import {
   exportStyleOption,
   skipJsExtensionsOption,
   bareOption,
+  httpClientOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
@@ -46,6 +47,7 @@ export interface GenerateOptions {
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   skipJsExtensions?: boolean;
   bare?: boolean;
+  httpClient?: 'axios' | 'fetch';
 }
 
 export async function generateAction(options: GenerateOptions): Promise<void> {
@@ -119,6 +121,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       bare: options.bare,
       mode: options.mode,
       templateDir: options.template,
+      httpClient: options.httpClient,
     });
 
     await generator.generate(ir);
@@ -156,4 +159,5 @@ export const generateCommand = new Command('generate')
   .addOption(exportStyleOption())
   .addOption(bareOption())
   .addOption(skipJsExtensionsOption())
+  .addOption(httpClientOption())
   .action(generateAction);

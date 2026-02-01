@@ -149,45 +149,68 @@ export class ApiClientGenerator {
       }],
     });
 
-    classDecl.addProperty({
-      name: 'axios',
-      type: 'AxiosInstance',
-      scope: Scope.Protected,
-      docs: [{
-        description: [
-          'Axios instance for making HTTP requests',
-          '',
-          '@protected',
-          '@type {AxiosInstance}',
-        ].join('\n'),
-      }],
-    });
+    if (this.options.httpClient !== 'fetch') {
+      classDecl.addProperty({
+        name: 'axios',
+        type: 'AxiosInstance',
+        scope: Scope.Protected,
+        docs: [{
+          description: [
+            'Axios instance for making HTTP requests',
+            '',
+            '@protected',
+            '@type {AxiosInstance}',
+          ].join('\n'),
+        }],
+      });
+    }
 
     // Add constructor with JSDoc
-    classDecl.addConstructor({
-      parameters: [
-        {
-          name: 'configuration',
-          type: 'Configuration',
-        },
-        {
-          name: 'axios',
-          type: 'AxiosInstance',
-        },
-      ],
-      statements: [
-        'this.configuration = configuration;',
-        'this.axios = axios;',
-      ],
-      docs: [{
-        description: [
-          'Create a new API client instance',
-          '',
-          '@param {Configuration} configuration - API client configuration',
-          '@param {AxiosInstance} axios - Axios instance for HTTP requests',
-        ].join('\n'),
-      }],
-    });
+    if (this.options.httpClient === 'fetch') {
+      classDecl.addConstructor({
+        parameters: [
+          {
+            name: 'configuration',
+            type: 'Configuration',
+          },
+        ],
+        statements: [
+          'this.configuration = configuration;',
+        ],
+        docs: [{
+          description: [
+            'Create a new API client instance',
+            '',
+            '@param {Configuration} configuration - API client configuration',
+          ].join('\n'),
+        }],
+      });
+    } else {
+      classDecl.addConstructor({
+        parameters: [
+          {
+            name: 'configuration',
+            type: 'Configuration',
+          },
+          {
+            name: 'axios',
+            type: 'AxiosInstance',
+          },
+        ],
+        statements: [
+          'this.configuration = configuration;',
+          'this.axios = axios;',
+        ],
+        docs: [{
+          description: [
+            'Create a new API client instance',
+            '',
+            '@param {Configuration} configuration - API client configuration',
+            '@param {AxiosInstance} axios - Axios instance for HTTP requests',
+          ].join('\n'),
+        }],
+      });
+    }
 
     // Add methods for each operation
     for (const operation of operations) {
@@ -204,11 +227,27 @@ export class ApiClientGenerator {
    * Add imports for API class
    */
   private addApiClassImports(sourceFile: SourceFile, operations: OperationDefinition[]): void {
-    // Add axios imports
-    sourceFile.addImportDeclaration({
-      moduleSpecifier: 'axios',
-      namedImports: ['AxiosInstance', 'AxiosResponse', 'RawAxiosRequestConfig'],
-    });
+    const configPath = this.options.esm ? '../configuration.js' : '../configuration';
+    const basePath = this.options.esm ? '../base.js' : '../base';
+
+    if (this.options.httpClient === 'fetch') {
+      // Add fetch-specific imports from base
+      sourceFile.addImportDeclaration({
+        moduleSpecifier: basePath,
+        namedImports: ['RequiredError', 'HttpResponse', 'RequestConfig', 'httpRequest'],
+      });
+    } else {
+      // Add axios imports
+      sourceFile.addImportDeclaration({
+        moduleSpecifier: 'axios',
+        namedImports: ['AxiosInstance', 'AxiosResponse', 'RawAxiosRequestConfig'],
+      });
+
+      sourceFile.addImportDeclaration({
+        moduleSpecifier: basePath,
+        namedImports: ['RequiredError'],
+      });
+    }
 
     // Add class-transformer import for response transformation
     sourceFile.addImportDeclaration({
@@ -222,18 +261,10 @@ export class ApiClientGenerator {
       namedImports: ['validate'],
     });
 
-    // Add base imports
-    const configPath = this.options.esm ? '../configuration.js' : '../configuration';
-    const basePath = this.options.esm ? '../base.js' : '../base';
-
+    // Add configuration import
     sourceFile.addImportDeclaration({
       moduleSpecifier: configPath,
       namedImports: ['Configuration'],
-    });
-
-    sourceFile.addImportDeclaration({
-      moduleSpecifier: basePath,
-      namedImports: ['RequiredError'],
     });
 
     // Collect model imports
@@ -382,9 +413,10 @@ export class ApiClientGenerator {
     }
 
     // Add options parameter
+    const optionsType = this.options.httpClient === 'fetch' ? 'Partial<RequestConfig>' : 'RawAxiosRequestConfig';
     parameters.push({
       name: 'options',
-      type: 'RawAxiosRequestConfig',
+      type: optionsType,
       hasQuestionToken: true,
     });
 
@@ -399,14 +431,16 @@ export class ApiClientGenerator {
                            operation.responses.get('201') ||
                            operation.responses.get('default');
 
+    const responseWrapper = this.options.httpClient === 'fetch' ? 'HttpResponse' : 'AxiosResponse';
+
     if (!successResponse || !successResponse.content || successResponse.content.size === 0) {
-      return 'Promise<AxiosResponse<void>>';
+      return `Promise<${responseWrapper}<void>>`;
     }
 
     const firstType = successResponse.content.values().next().value as TypeReference;
     const typeStr = this.tsDocGenerator.typeReferenceToString(firstType);
 
-    return `Promise<AxiosResponse<${typeStr}>>`;
+    return `Promise<${responseWrapper}<${typeStr}>>`;
   }
 
   /**
@@ -474,6 +508,202 @@ export class ApiClientGenerator {
    * Generate method body
    */
   private generateMethodBody(operation: OperationDefinition): string {
+    if (this.options.httpClient === 'fetch') {
+      return this.generateFetchMethodBody(operation);
+    }
+    return this.generateAxiosMethodBody(operation);
+  }
+
+  /**
+   * Generate method body for fetch client
+   */
+  private generateFetchMethodBody(operation: OperationDefinition): string {
+    const lines: string[] = [];
+
+    // Validate required parameters
+    const requiredParams = operation.parameters.filter(p => p.required);
+    if (operation.requestBody?.required) {
+      requiredParams.push({
+        name: 'requestBody',
+        in: 'body' as any,
+        required: true,
+        type: { kind: 'unknown' as any },
+      });
+    }
+
+    for (const param of requiredParams) {
+      const paramName = param.name === 'requestBody' ? param.name : toCamelCase(param.name);
+      lines.push(`if (${paramName} === null || ${paramName} === undefined) {`);
+      lines.push(`  throw new RequiredError('${paramName}', 'Required parameter ${paramName} was null or undefined when calling ${toCamelCase(operation.operationId)}.');`);
+      lines.push(`}`);
+      lines.push('');
+    }
+
+    // Build path
+    let pathExpr = `'${operation.path}'`;
+    const pathParams = operation.parameters.filter(p => p.in === 'path');
+    for (const param of pathParams) {
+      const paramName = toCamelCase(param.name);
+      pathExpr += `.replace('{${param.name}}', encodeURIComponent(String(${paramName})))`;
+    }
+
+    lines.push(`const localVarPath = ${pathExpr};`);
+    lines.push(`const localVarUrlObj = new URL(localVarPath, this.configuration.basePath);`);
+    lines.push(`const localVarHeaderParameter: Record<string, string> = {};`);
+    lines.push(`const localVarQueryParameter: Record<string, string> = {};`);
+    lines.push('');
+
+    // Add query parameters
+    const queryParams = operation.parameters.filter(p => p.in === 'query');
+    if (queryParams.length > 0) {
+      for (const param of queryParams) {
+        const paramName = toCamelCase(param.name);
+        lines.push(`if (${paramName} !== undefined) {`);
+        lines.push(`  localVarQueryParameter['${param.name}'] = String(${paramName});`);
+        lines.push(`}`);
+      }
+      lines.push('');
+    }
+
+    // Add header parameters
+    const headerParams = operation.parameters.filter(p => p.in === 'header');
+    if (headerParams.length > 0) {
+      for (const param of headerParams) {
+        const paramName = toCamelCase(param.name);
+        lines.push(`if (${paramName} !== undefined && ${paramName} !== null) {`);
+        lines.push(`  localVarHeaderParameter['${param.name}'] = String(${paramName});`);
+        lines.push(`}`);
+      }
+      lines.push('');
+    }
+
+    // Set content type for request body
+    if (operation.requestBody) {
+      lines.push(`localVarHeaderParameter['Content-Type'] = 'application/json';`);
+      lines.push('');
+    }
+
+    // Apply configuration headers
+    lines.push(`Object.assign(localVarHeaderParameter, this.configuration.headers);`);
+    lines.push('');
+
+    // Set query parameters
+    if (queryParams.length > 0) {
+      lines.push(`localVarUrlObj.search = new URLSearchParams(localVarQueryParameter).toString();`);
+      lines.push('');
+    }
+
+    // Request validation (same as axios)
+    if (operation.requestBody) {
+      const requestBodyType = this.getRequestBodyType(operation.requestBody);
+      if (requestBodyType && requestBodyType !== 'any') {
+        lines.push(`// Request validation`);
+        lines.push(`if (this.configuration.enableRequestValidation === true && requestBody) {`);
+        lines.push(`  if (!(requestBody instanceof ${requestBodyType})) {`);
+        lines.push(`    const error = new Error(\`Request body must be an instance of ${requestBodyType}\`);`);
+        lines.push(`    if (this.configuration.onRequestValidationError) {`);
+        lines.push(`      this.configuration.onRequestValidationError([error as any], ${requestBodyType}, requestBody);`);
+        lines.push(`    } else {`);
+        lines.push(`      throw error;`);
+        lines.push(`    }`);
+        lines.push(`  } else {`);
+        lines.push(`    const errors = await validate(requestBody as object);`);
+        lines.push(`    if (errors.length > 0) {`);
+        lines.push(`      if (this.configuration.onRequestValidationError) {`);
+        lines.push(`        this.configuration.onRequestValidationError(errors, ${requestBodyType}, requestBody);`);
+        lines.push(`      } else {`);
+        lines.push(`        throw new Error(\`Request validation failed for ${requestBodyType}: \${errors.length} error(s)\`);`);
+        lines.push(`      }`);
+        lines.push(`    }`);
+        lines.push(`  }`);
+        lines.push(`}`);
+        lines.push('');
+      }
+    }
+
+    // Build request config
+    lines.push(`const requestConfig: RequestConfig = {`);
+    lines.push(`  method: '${operation.method.toUpperCase()}',`);
+    lines.push(`  headers: localVarHeaderParameter,`);
+    if (operation.requestBody) {
+      lines.push(`  body: JSON.stringify(requestBody),`);
+    }
+    lines.push(`  timeout: this.configuration.timeout,`);
+    lines.push(`  credentials: this.configuration.credentials,`);
+    lines.push(`  mode: this.configuration.mode,`);
+    lines.push(`  ...options,`);
+    lines.push(`};`);
+    lines.push('');
+
+    // Make request
+    const responseInfo = this.getResponseTypeInfo(operation);
+
+    if (!responseInfo.hasResponse || responseInfo.isPrimitive) {
+      lines.push(`return httpRequest<${responseInfo.fullType === 'void' ? 'void' : responseInfo.fullType}>(localVarUrlObj.toString(), requestConfig);`);
+    } else {
+      lines.push(`return httpRequest<${responseInfo.fullType}>(localVarUrlObj.toString(), requestConfig).then(async (response) => {`);
+      lines.push(`  if (this.configuration.enableResponseTransformation !== false) {`);
+      lines.push(`    try {`);
+
+      if (responseInfo.isArray) {
+        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data as any[]);`);
+      } else {
+        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data);`);
+      }
+
+      lines.push(``);
+      lines.push(`      if (this.configuration.enableResponseValidation === true) {`);
+
+      if (responseInfo.isArray) {
+        lines.push(`        const validationPromises = (response.data as any[]).map(async (item) => {`);
+        lines.push(`          const errors = await validate(item);`);
+        lines.push(`          if (errors.length > 0) {`);
+        lines.push(`            if (this.configuration.onResponseValidationError) {`);
+        lines.push(`              this.configuration.onResponseValidationError(errors, ${responseInfo.baseType}, item);`);
+        lines.push(`            } else {`);
+        lines.push(`              throw new Error(\`Validation failed for ${responseInfo.baseType}: \${errors.length} error(s)\`);`);
+        lines.push(`            }`);
+        lines.push(`          }`);
+        lines.push(`          return item;`);
+        lines.push(`        });`);
+        lines.push(`        await Promise.all(validationPromises);`);
+      } else {
+        lines.push(`        const errors = await validate(response.data as object);`);
+        lines.push(`        if (errors.length > 0) {`);
+        lines.push(`          if (this.configuration.onResponseValidationError) {`);
+        lines.push(`            this.configuration.onResponseValidationError(errors, ${responseInfo.baseType}, response.data);`);
+        lines.push(`          } else {`);
+        lines.push(`            throw new Error(\`Validation failed for ${responseInfo.baseType}: \${errors.length} error(s)\`);`);
+        lines.push(`          }`);
+        lines.push(`        }`);
+      }
+
+      lines.push(`      }`);
+      lines.push(`    } catch (error) {`);
+      lines.push(`      if (this.configuration.onTransformationError) {`);
+      lines.push(`        this.configuration.onTransformationError(error as Error, ${responseInfo.baseType}, response.data);`);
+      lines.push(`      } else {`);
+      lines.push(`        console.error('class-transformer failed to transform response:', error);`);
+      lines.push(`      }`);
+      lines.push(`    }`);
+      lines.push(`  }`);
+
+      if (responseInfo.isArray) {
+        lines.push(`  return response as HttpResponse<${responseInfo.baseType}[]>;`);
+      } else {
+        lines.push(`  return response as HttpResponse<${responseInfo.baseType}>;`);
+      }
+
+      lines.push(`});`);
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Generate method body for axios client
+   */
+  private generateAxiosMethodBody(operation: OperationDefinition): string {
     const lines: string[] = [];
 
     // Validate required parameters
@@ -697,7 +927,112 @@ export class ApiClientGenerator {
     const filePath = path.join(outputDir, 'base.ts');
     const sourceFile = this.project.createSourceFile(filePath, '', { overwrite: true });
 
-    sourceFile.addStatements(`/**
+    if (this.options.httpClient === 'fetch') {
+      sourceFile.addStatements(`/**
+ * RequiredError class
+ */
+export class RequiredError extends Error {
+  name: 'RequiredError' = 'RequiredError';
+
+  constructor(public field: string, msg?: string) {
+    super(msg);
+  }
+}
+
+/**
+ * HTTP Response wrapper for native fetch
+ */
+export interface HttpResponse<T> {
+  data: T;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+}
+
+/**
+ * Request configuration extending native RequestInit
+ */
+export interface RequestConfig extends RequestInit {
+  timeout?: number;
+}
+
+/**
+ * HTTP request error with response details
+ */
+export class ResponseError extends Error {
+  name: 'ResponseError' = 'ResponseError';
+  constructor(public response: HttpResponse<unknown>, msg?: string) {
+    super(msg || \`Request failed with status \${response.status}\`);
+  }
+}
+
+/**
+ * Execute HTTP request using native fetch
+ */
+export async function httpRequest<T>(
+  url: string,
+  options: RequestConfig = {}
+): Promise<HttpResponse<T>> {
+  const { timeout = 30000, ...fetchOptions } = options;
+
+  // Setup abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      signal: controller.signal,
+    });
+
+    // Parse response headers
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headers[key] = value;
+    });
+
+    // Parse response body based on content type
+    const contentType = response.headers.get('content-type');
+    const contentLength = response.headers.get('content-length');
+    let data: T;
+
+    // Handle empty responses (204 No Content or empty body)
+    if (response.status === 204 || contentLength === '0') {
+      data = undefined as unknown as T;
+    } else if (contentType?.includes('application/json') || contentType?.includes('+json')) {
+      data = await response.json();
+    } else if (contentType?.startsWith('text/')) {
+      data = await response.text() as unknown as T;
+    } else {
+      // Binary data - return as ArrayBuffer for universal compatibility
+      data = await response.arrayBuffer() as unknown as T;
+    }
+
+    const result: HttpResponse<T> = {
+      data,
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    };
+
+    if (!response.ok) {
+      throw new ResponseError(result);
+    }
+
+    return result;
+  } catch (error) {
+    if (error instanceof ResponseError) throw error;
+    if ((error as Error).name === 'AbortError') {
+      throw new Error(\`Request timeout after \${timeout}ms\`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+`);
+    } else {
+      sourceFile.addStatements(`/**
  * RequiredError class
  */
 export class RequiredError extends Error {
@@ -714,6 +1049,7 @@ export class RequiredError extends Error {
 import axios from 'axios';
 export const axiosInstance = axios.create();
 `);
+    }
 
     sourceFile.formatText({
       indentSize: 2,
@@ -728,6 +1064,143 @@ export const axiosInstance = axios.create();
     const filePath = path.join(outputDir, 'configuration.ts');
     const sourceFile = this.project.createSourceFile(filePath, '', { overwrite: true });
 
+    if (this.options.httpClient === 'fetch') {
+      this.generateFetchConfiguration(sourceFile);
+    } else {
+      this.generateAxiosConfiguration(sourceFile);
+    }
+
+    sourceFile.formatText({
+      indentSize: 2,
+      convertTabsToSpaces: true,
+    });
+  }
+
+  /**
+   * Generate fetch-specific configuration
+   */
+  private generateFetchConfiguration(sourceFile: SourceFile): void {
+    sourceFile.addStatements(`/**
+ * Configuration parameters for fetch-based API clients
+ */
+export interface ConfigurationParameters {
+  /**
+   * Base URL for API requests
+   *
+   * @type {string}
+   * @example 'https://api.example.com'
+   */
+  basePath?: string;
+
+  /**
+   * Custom HTTP headers to include in all requests
+   *
+   * @type {{ [key: string]: string }}
+   * @example { 'Authorization': 'Bearer token123' }
+   */
+  headers?: { [key: string]: string };
+
+  /**
+   * Request timeout in milliseconds
+   *
+   * @type {number}
+   * @default 30000
+   */
+  timeout?: number;
+
+  /**
+   * Fetch credentials mode
+   *
+   * @type {RequestCredentials}
+   * @example 'include'
+   */
+  credentials?: RequestCredentials;
+
+  /**
+   * Fetch request mode
+   *
+   * @type {RequestMode}
+   * @example 'cors'
+   */
+  mode?: RequestMode;
+
+  /**
+   * Enable automatic response transformation using plainToInstance
+   *
+   * @type {boolean}
+   * @default true
+   */
+  enableResponseTransformation?: boolean;
+
+  /**
+   * Callback invoked when response transformation fails
+   */
+  onTransformationError?: (error: Error, modelClass: any, data: any) => void;
+
+  /**
+   * Enable automatic response validation using class-validator
+   *
+   * @type {boolean}
+   * @default false
+   */
+  enableResponseValidation?: boolean;
+
+  /**
+   * Callback invoked when response validation fails
+   */
+  onResponseValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+
+  /**
+   * Enable automatic request validation using class-validator
+   *
+   * @type {boolean}
+   * @default false
+   */
+  enableRequestValidation?: boolean;
+
+  /**
+   * Callback invoked when request validation fails
+   */
+  onRequestValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+}
+
+/**
+ * Configuration class for fetch-based API clients
+ */
+export class Configuration {
+  basePath: string;
+  headers: { [key: string]: string };
+  timeout: number;
+  credentials?: RequestCredentials;
+  mode?: RequestMode;
+  enableResponseTransformation: boolean;
+  onTransformationError?: (error: Error, modelClass: any, data: any) => void;
+  enableResponseValidation: boolean;
+  onResponseValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+  enableRequestValidation: boolean;
+  onRequestValidationError?: (errors: any[], modelClass: any, instance: any) => void;
+
+  constructor(params: ConfigurationParameters = {}) {
+    this.basePath = params.basePath || '';
+    this.headers = params.headers || {};
+    this.timeout = params.timeout || 30000;
+    this.credentials = params.credentials;
+    this.mode = params.mode;
+    this.enableResponseTransformation = params.enableResponseTransformation ?? true;
+    this.onTransformationError = params.onTransformationError;
+    this.enableResponseValidation = params.enableResponseValidation ?? false;
+    this.onResponseValidationError = params.onResponseValidationError;
+    this.enableRequestValidation = params.enableRequestValidation ?? false;
+    this.onRequestValidationError = params.onRequestValidationError;
+  }
+}
+`);
+  }
+
+  /**
+   * Generate axios-specific configuration
+   */
+  private generateAxiosConfiguration(sourceFile: SourceFile): void {
     sourceFile.addStatements(`/**
  * Configuration parameters for API clients
  */
@@ -959,11 +1432,6 @@ export class Configuration {
   }
 }
 `);
-
-    sourceFile.formatText({
-      indentSize: 2,
-      convertTabsToSpaces: true,
-    });
   }
 
   /**

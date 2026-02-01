@@ -14,6 +14,7 @@ import {
   skipJsExtensionsOption,
   crdKindCaseOption,
   includeStatusOption,
+  httpClientOption,
   parseHeaders,
   collectValues,
   validateTimeout,
@@ -176,6 +177,22 @@ describe('Options', () => {
       expect(option).toBeInstanceOf(Option);
       expect(option.flags).toContain('--include-status');
       expect(option.defaultValue).toBe(false);
+    });
+  });
+
+  describe('httpClientOption', () => {
+    it('should create http client option with axios and fetch choices', () => {
+      const option = httpClientOption();
+
+      expect(option).toBeInstanceOf(Option);
+      expect(option.flags).toContain('--http-client <client>');
+      expect(option.argChoices).toEqual(['axios', 'fetch']);
+    });
+
+    it('should default to axios', () => {
+      const option = httpClientOption();
+
+      expect(option.defaultValue).toBe('axios');
     });
   });
 

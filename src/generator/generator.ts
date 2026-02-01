@@ -325,8 +325,8 @@ export class Generator {
       dependencies: {},
     };
 
-    // Add axios if API client was generated
-    if (hasApiClient) {
+    // Add axios if API client was generated and not using fetch
+    if (hasApiClient && this.options.httpClient !== 'fetch') {
       packageJson.dependencies['axios'] = '^1.6.0';
     }
 

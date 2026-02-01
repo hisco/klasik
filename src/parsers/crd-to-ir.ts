@@ -413,6 +413,7 @@ export class CRDToIRConverter {
   /**
    * Create ObjectMeta schema
    * Kubernetes ObjectMeta is a common type used in metadata
+   * See: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta
    */
   private createObjectMetaSchema(): void {
     const name = 'ObjectMeta';
@@ -422,33 +423,93 @@ export class CRDToIRConverter {
       return;
     }
 
+    // Create OwnerReference schema first (needed for ownerReferences field)
+    this.createOwnerReferenceSchema();
+
     const schema = IRHelpers.createSchema(name);
     schema.description = 'Kubernetes object metadata';
 
-    // Common ObjectMeta fields
+    // Standard ObjectMeta fields from Kubernetes API
+    // Type: 'string' | 'number' | 'string-map' | 'string-array' | 'owner-refs'
     const fields: Array<[string, string, string]> = [
-      ['name', 'string', 'Name of the resource'],
-      ['namespace', 'string', 'Namespace of the resource'],
-      ['uid', 'string', 'UID of the resource'],
-      ['resourceVersion', 'string', 'Resource version'],
-      ['generation', 'number', 'Generation number'],
-      ['creationTimestamp', 'string', 'Creation timestamp'],
-      ['deletionTimestamp', 'string', 'Deletion timestamp'],
-      ['labels', 'object', 'Labels'],
-      ['annotations', 'object', 'Annotations'],
+      ['name', 'string', 'Name must be unique within a namespace'],
+      ['generateName', 'string', 'GenerateName is an optional prefix used to generate a unique name'],
+      ['namespace', 'string', 'Namespace defines the space within which each name must be unique'],
+      ['selfLink', 'string', 'Deprecated: selfLink is a legacy read-only field'],
+      ['uid', 'string', 'UID is the unique identifier in time and space for this object'],
+      ['resourceVersion', 'string', 'An opaque value that represents the internal version of this object'],
+      ['generation', 'number', 'A sequence number representing a specific generation of the desired state'],
+      ['creationTimestamp', 'string', 'CreationTimestamp is a timestamp representing the server time when this object was created'],
+      ['deletionTimestamp', 'string', 'DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted'],
+      ['deletionGracePeriodSeconds', 'number', 'Number of seconds allowed for this object to gracefully terminate'],
+      ['labels', 'string-map', 'Map of string keys and values that can be used to organize and categorize objects'],
+      ['annotations', 'string-map', 'Annotations is an unstructured key value map stored with a resource'],
+      ['finalizers', 'string-array', 'Must be empty before the object is deleted from the registry'],
+      ['ownerReferences', 'owner-refs', 'List of objects depended by this object'],
     ];
 
     for (const [propName, type, description] of fields) {
-      const typeRef =
-        type === 'object'
-          ? IRHelpers.createTypeReference('dictionary', undefined, undefined, IRHelpers.createTypeReference('primitive', 'string'))
-          : IRHelpers.createTypeReference('primitive', type as any);
+      let typeRef;
+      switch (type) {
+        case 'string-map':
+          typeRef = IRHelpers.createTypeReference('dictionary', undefined, undefined, IRHelpers.createTypeReference('primitive', 'string'));
+          break;
+        case 'string-array':
+          typeRef = IRHelpers.createTypeReference('array', undefined, IRHelpers.createTypeReference('primitive', 'string'));
+          break;
+        case 'owner-refs':
+          typeRef = IRHelpers.createTypeReference('array', undefined, IRHelpers.createTypeReference('reference', 'OwnerReference'));
+          break;
+        default:
+          typeRef = IRHelpers.createTypeReference('primitive', type as any);
+      }
 
       const prop = IRHelpers.createProperty(propName, typeRef);
       prop.description = description;
       prop.required = false;
 
       schema.properties.set(propName, prop);
+    }
+
+    this.ir.schemas.set(name, schema);
+  }
+
+  /**
+   * Create OwnerReference schema
+   * Used by ObjectMeta.ownerReferences field
+   * See: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#ownerreference-v1-meta
+   */
+  private createOwnerReferenceSchema(): void {
+    const name = 'OwnerReference';
+
+    // Skip if already created
+    if (this.ir.schemas.has(name)) {
+      return;
+    }
+
+    const schema = IRHelpers.createSchema(name);
+    schema.description = 'OwnerReference contains enough information to let you identify an owning object';
+
+    const fields: Array<[string, string, string, boolean]> = [
+      ['apiVersion', 'string', 'API version of the referent', true],
+      ['kind', 'string', 'Kind of the referent', true],
+      ['name', 'string', 'Name of the referent', true],
+      ['uid', 'string', 'UID of the referent', true],
+      ['controller', 'boolean', 'If true, this reference points to the managing controller', false],
+      ['blockOwnerDeletion', 'boolean', 'If true, AND if the owner has the foregroundDeletion finalizer, then the owner cannot be deleted from the key-value store until this reference is removed', false],
+    ];
+
+    for (const [propName, type, description, required] of fields) {
+      const typeRef = IRHelpers.createTypeReference('primitive', type as any);
+      const prop = IRHelpers.createProperty(propName, typeRef);
+      prop.description = description;
+      prop.required = required;
+
+      schema.properties.set(propName, prop);
+
+      if (required) {
+        schema.required.add(propName);
+      }
     }
 
     this.ir.schemas.set(name, schema);

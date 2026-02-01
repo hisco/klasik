@@ -635,10 +635,40 @@ describe('CRDToIRConverter', () => {
 
       const objectMeta = ir.schemas.get('ObjectMeta')!;
       expect(objectMeta.description).toBe('Kubernetes object metadata');
+
+      // Standard fields
       expect(objectMeta.properties.has('name')).toBe(true);
       expect(objectMeta.properties.has('namespace')).toBe(true);
       expect(objectMeta.properties.has('labels')).toBe(true);
       expect(objectMeta.properties.has('annotations')).toBe(true);
+
+      // Verify new fields are present (issue: missing finalizers, ownerReferences)
+      expect(objectMeta.properties.has('finalizers')).toBe(true);
+      expect(objectMeta.properties.has('ownerReferences')).toBe(true);
+      expect(objectMeta.properties.has('generateName')).toBe(true);
+      expect(objectMeta.properties.has('deletionGracePeriodSeconds')).toBe(true);
+
+      // Verify finalizers is a string array
+      const finalizersProp = objectMeta.properties.get('finalizers')!;
+      expect(finalizersProp.type.kind).toBe('array');
+      expect(finalizersProp.type.elementType?.kind).toBe('primitive');
+      expect(finalizersProp.type.elementType?.name).toBe('string');
+
+      // Verify ownerReferences is an array of OwnerReference
+      const ownerRefsProp = objectMeta.properties.get('ownerReferences')!;
+      expect(ownerRefsProp.type.kind).toBe('array');
+      expect(ownerRefsProp.type.elementType?.kind).toBe('reference');
+      expect(ownerRefsProp.type.elementType?.name).toBe('OwnerReference');
+
+      // Verify OwnerReference schema is also created
+      expect(ir.schemas.has('OwnerReference')).toBe(true);
+      const ownerRef = ir.schemas.get('OwnerReference')!;
+      expect(ownerRef.properties.has('apiVersion')).toBe(true);
+      expect(ownerRef.properties.has('kind')).toBe(true);
+      expect(ownerRef.properties.has('name')).toBe(true);
+      expect(ownerRef.properties.has('uid')).toBe(true);
+      expect(ownerRef.properties.has('controller')).toBe(true);
+      expect(ownerRef.properties.has('blockOwnerDeletion')).toBe(true);
     });
 
     it('should link metadata property to ObjectMeta schema', () => {

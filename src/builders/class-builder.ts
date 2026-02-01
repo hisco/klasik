@@ -44,6 +44,7 @@ export interface GeneratorOptions {
   templateDir?: string;
   skipJsExtensions?: boolean;
   bare?: boolean;
+  httpClient?: 'axios' | 'fetch';
 }
 
 /**

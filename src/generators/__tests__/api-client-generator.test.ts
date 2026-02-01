@@ -631,4 +631,270 @@ describe('ApiClientGenerator', () => {
       expect(indexContent).toContain("export * from './users-api'");
     });
   });
+
+  describe('fetch client generation', () => {
+    it('should generate API client with fetch imports', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getUser',
+        method: 'GET',
+        path: '/users/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              content: new Map([
+                ['application/json', { kind: 'reference', name: 'User' }],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'users-api.ts'),
+        'utf-8'
+      );
+
+      // Should have fetch imports from base
+      expect(apiContent).toContain("import { RequiredError, HttpResponse, RequestConfig, httpRequest } from '../base'");
+
+      // Should NOT have axios imports
+      expect(apiContent).not.toContain("import { AxiosInstance");
+      expect(apiContent).not.toContain("from 'axios'");
+    });
+
+    it('should generate base.ts with httpRequest function', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getUser',
+        method: 'GET',
+        path: '/users',
+        parameters: [],
+        responses: new Map(),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const baseContent = fs.readFileSync(
+        path.join(tempDir, 'base.ts'),
+        'utf-8'
+      );
+
+      // Should have fetch-specific exports
+      expect(baseContent).toContain('export async function httpRequest');
+      expect(baseContent).toContain('export interface HttpResponse');
+      expect(baseContent).toContain('export interface RequestConfig');
+      expect(baseContent).toContain('export class ResponseError');
+      expect(baseContent).toContain('export class RequiredError');
+
+      // Should NOT have axios
+      expect(baseContent).not.toContain('import axios');
+      expect(baseContent).not.toContain('axiosInstance');
+    });
+
+    it('should generate configuration with fetch-specific options', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getUser',
+        method: 'GET',
+        path: '/users',
+        parameters: [],
+        responses: new Map(),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const configContent = fs.readFileSync(
+        path.join(tempDir, 'configuration.ts'),
+        'utf-8'
+      );
+
+      // Should have fetch-specific options
+      expect(configContent).toContain('credentials?: RequestCredentials');
+      expect(configContent).toContain('mode?: RequestMode');
+    });
+
+    it('should generate method with HttpResponse return type', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getUser',
+        method: 'GET',
+        path: '/users/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              content: new Map([
+                ['application/json', { kind: 'reference', name: 'User' }],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'users-api.ts'),
+        'utf-8'
+      );
+
+      // Check the actual method signature uses HttpResponse (not the JSDoc)
+      expect(apiContent).toMatch(/async getUser\([^)]+\): Promise<HttpResponse<User>>/);
+      // Should use httpRequest function
+      expect(apiContent).toContain('return httpRequest<User>');
+    });
+
+    it('should generate class without axios property', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getUser',
+        method: 'GET',
+        path: '/users',
+        parameters: [],
+        responses: new Map(),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'users-api.ts'),
+        'utf-8'
+      );
+
+      // Should have only configuration in constructor
+      expect(apiContent).toContain('constructor(configuration: Configuration)');
+      expect(apiContent).not.toContain('constructor(configuration: Configuration, axios: AxiosInstance)');
+      expect(apiContent).not.toContain('protected axios: AxiosInstance');
+    });
+
+    it('should handle empty responses (204 No Content)', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'deleteUser',
+        method: 'DELETE',
+        path: '/users/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map([
+          [
+            '204',
+            {
+              statusCode: '204',
+              description: 'No Content',
+            },
+          ],
+        ]),
+        tags: ['users'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['deleteUser', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const baseContent = fs.readFileSync(
+        path.join(tempDir, 'base.ts'),
+        'utf-8'
+      );
+
+      // Should handle 204 responses
+      expect(baseContent).toContain('response.status === 204');
+    });
+  });
 });

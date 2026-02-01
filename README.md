@@ -17,12 +17,13 @@ Perfect for:
 ✅ **class-validator** - Built-in validation decorators
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
-📦 **Multiple Formats** - OpenAPI 3.x, Swagger 2.0, Kubernetes CRDs, JSON Schema, Go structs
+📦 **Multiple Formats** - OpenAPI 3.x, Swagger 2.0 (auto-converted), Kubernetes CRDs, JSON Schema, Go structs
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
 🔗 **External $refs** - Automatic resolution of external schemas
 🎭 **Custom Templates** - Mustache-based customization
 ⚙️ **Flexible Output** - Multiple export styles (namespace, direct, both)
-🧪 **Well Tested** - Comprehensive test coverage (797 passing tests)
+🌐 **HTTP Client Choice** - Generate with Axios (default) or native Fetch API
+🧪 **Well Tested** - Comprehensive test coverage (1038+ passing tests)
 🚀 **Production Ready** - Used in real-world projects
 📝 **Full CLI** - Rich command-line interface with 4 commands
 🔐 **Authentication** - Custom headers including Bearer tokens
@@ -674,8 +675,28 @@ validate(data);
 Generate TypeScript client from OpenAPI specification.
 
 **Supported formats:**
-- OpenAPI 3.x (native)
+- OpenAPI 3.x (native support)
 - Swagger 2.0 (automatically converted to OpenAPI 3.0)
+
+**Swagger 2.0 Auto-Conversion:**
+
+Klasik automatically detects Swagger 2.0 specifications and converts them to OpenAPI 3.0 before generation. This is transparent - you don't need to do anything special:
+
+```bash
+# Works with Swagger 2.0 specs
+klasik generate \
+  --url https://petstore.swagger.io/v2/swagger.json \
+  --output ./generated
+
+# Output: "Converting Swagger 2.0 to OpenAPI 3.0..."
+```
+
+The conversion handles:
+- Path and operation migration
+- Parameter format changes
+- Security scheme updates
+- Response object structure
+- Schema definitions to components
 
 **Usage:**
 
@@ -690,6 +711,7 @@ klasik generate [options]
 | `-u, --url <url>` | OpenAPI spec URL or file path (required) | - |
 | `-o, --output <dir>` | Output directory (required) | - |
 | `-m, --mode <mode>` | Generation mode: `full` or `models-only` | `full` |
+| `--http-client <client>` | HTTP client: `axios` or `fetch` | `axios` |
 | `--resolve-refs` | Resolve external $ref files | `false` |
 | `--esm` | Add .js extensions for ESM compatibility | `false` |
 | `--skip-js-extensions` | Skip .js extensions (for bundlers) | `false` |
@@ -757,6 +779,12 @@ klasik generate \
   --url ./openapi.yaml \
   --output ./generated \
   --template ./my-templates
+
+# With native fetch instead of Axios
+klasik generate \
+  --url ./openapi.yaml \
+  --output ./generated \
+  --http-client fetch
 ```
 
 ### `klasik download`
@@ -1524,6 +1552,103 @@ klasik generate \
   --skip-js-extensions
 ```
 
+### HTTP Client Options
+
+Klasik supports two HTTP clients for generated API classes: **Axios** (default) and **native Fetch API**.
+
+#### Axios (Default)
+
+The default HTTP client uses Axios, which provides:
+- Automatic request/response transformation
+- Request cancellation
+- Interceptors for request/response manipulation
+- Wide browser and Node.js compatibility
+
+```bash
+klasik generate \
+  --url ./openapi.yaml \
+  --output ./generated
+  # --http-client axios (default)
+```
+
+**Generated code uses:**
+```typescript
+import { AxiosInstance, AxiosResponse } from 'axios';
+
+export class UsersApi {
+  constructor(configuration: Configuration, axios: AxiosInstance) {
+    this.configuration = configuration;
+    this.axios = axios;
+  }
+
+  async getUser(id: string): Promise<AxiosResponse<User>> {
+    // Uses this.axios.request()
+  }
+}
+```
+
+#### Native Fetch
+
+For projects that prefer native APIs or want to minimize dependencies, use the `--http-client fetch` option:
+
+```bash
+klasik generate \
+  --url ./openapi.yaml \
+  --output ./generated \
+  --http-client fetch
+```
+
+**Benefits:**
+- No external HTTP dependencies (no Axios)
+- Smaller bundle size
+- Native browser API
+- Works in modern Node.js (18+), Deno, Bun, and edge runtimes
+- Built-in timeout support using AbortController
+
+**Generated code uses:**
+```typescript
+import { HttpResponse, RequestConfig, httpRequest } from './base';
+
+export class UsersApi {
+  constructor(configuration: Configuration) {
+    this.configuration = configuration;
+  }
+
+  async getUser(id: string): Promise<HttpResponse<User>> {
+    // Uses httpRequest() wrapper around native fetch
+  }
+}
+```
+
+**HttpResponse interface:**
+```typescript
+interface HttpResponse<T> {
+  data: T;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+}
+```
+
+**Configuration options for fetch:**
+```typescript
+const config = new Configuration({
+  basePath: 'https://api.example.com',
+  headers: { 'Authorization': 'Bearer token' },
+  timeout: 30000,           // Request timeout in ms
+  credentials: 'include',   // Fetch credentials mode
+  mode: 'cors',             // Fetch request mode
+});
+
+const api = new UsersApi(config);
+```
+
+**Response handling:**
+- JSON responses (`application/json`, `*+json`) are automatically parsed
+- Text responses (`text/*`) are returned as strings
+- Binary responses are returned as `ArrayBuffer`
+- Empty responses (204 No Content) are handled gracefully
+
 ### Custom Templates
 
 Klasik uses Mustache templates for code generation. You can provide custom templates:
@@ -1656,6 +1781,7 @@ Built with:
 - [class-validator](https://github.com/typestack/class-validator) - Runtime validation
 - [ajv](https://github.com/ajv-validator/ajv) - JSON Schema validator
 - [ajv-formats](https://github.com/ajv-validator/ajv-formats) - Format validation for Ajv
+- [swagger2openapi](https://github.com/Mermade/oas-kit/tree/main/packages/swagger2openapi) - Swagger 2.0 to OpenAPI 3.0 conversion
 - [mustache](https://github.com/janl/mustache.js) - Template engine
 - [commander](https://github.com/tj/commander.js) - CLI framework
 
