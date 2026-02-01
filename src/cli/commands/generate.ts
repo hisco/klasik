@@ -27,9 +27,11 @@ import {
   skipJsExtensionsOption,
   bareOption,
   httpClientOption,
+  cleanOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
+import * as fs from 'fs';
 
 export interface GenerateOptions {
   url: string;
@@ -48,6 +50,7 @@ export interface GenerateOptions {
   skipJsExtensions?: boolean;
   bare?: boolean;
   httpClient?: 'axios' | 'fetch';
+  clean?: boolean;
 }
 
 export async function generateAction(options: GenerateOptions): Promise<void> {
@@ -63,6 +66,13 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
 
     if (options.bare && options.exportStyle) {
       Logger.warn('--export-style is ignored when using --bare flag');
+    }
+
+    // Clean output directory if requested
+    if (options.clean && fs.existsSync(options.output)) {
+      spinner.text = 'Cleaning output directory...';
+      fs.rmSync(options.output, { recursive: true, force: true });
+      Logger.debug(`Cleaned output directory: ${options.output}`);
     }
 
     // Parse headers
@@ -160,4 +170,5 @@ export const generateCommand = new Command('generate')
   .addOption(bareOption())
   .addOption(skipJsExtensionsOption())
   .addOption(httpClientOption())
+  .addOption(cleanOption())
   .action(generateAction);

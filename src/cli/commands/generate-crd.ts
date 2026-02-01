@@ -29,10 +29,12 @@ import {
   includeOption,
   exportStyleOption,
   bareOption,
+  cleanOption,
   parseHeaders,
   collectValues,
   parseIncludeValues,
 } from '../utils/options';
+import * as fs from 'fs';
 
 export interface GenerateCrdOptions {
   url: string[];
@@ -51,6 +53,7 @@ export interface GenerateCrdOptions {
   bare?: boolean;
   timeout?: number;
   include?: string[];
+  clean?: boolean;
 }
 
 /**
@@ -87,6 +90,13 @@ export async function generateCrdAction(options: GenerateCrdOptions): Promise<vo
   const spinner = ora('Loading CRD specifications...').start();
 
   try {
+    // Clean output directory if requested
+    if (options.clean && fs.existsSync(options.output)) {
+      spinner.text = 'Cleaning output directory...';
+      fs.rmSync(options.output, { recursive: true, force: true });
+      Logger.debug(`Cleaned output directory: ${options.output}`);
+    }
+
     // Parse headers
     const headers = options.header ? parseHeaders(options.header) : {};
     Logger.debug(`Headers: ${JSON.stringify(headers)}`);
@@ -229,4 +239,5 @@ export const generateCrdCommand = new Command('generate-crd')
   .addOption(exportStyleOption())
   .addOption(bareOption())
   .addOption(timeoutOption())
+  .addOption(cleanOption())
   .action(generateCrdAction);

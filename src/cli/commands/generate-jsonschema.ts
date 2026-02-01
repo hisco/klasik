@@ -25,9 +25,11 @@ import {
   keepSpecOption,
   exportStyleOption,
   bareOption,
+  cleanOption,
   parseHeaders,
   collectValues,
 } from '../utils/options';
+import * as fs from 'fs';
 
 export interface GenerateJsonSchemaOptions {
   url: string[];
@@ -43,6 +45,7 @@ export interface GenerateJsonSchemaOptions {
   exportStyle?: 'namespace' | 'direct' | 'both' | 'none';
   bare?: boolean;
   timeout?: number;
+  clean?: boolean;
 }
 
 /**
@@ -101,6 +104,13 @@ export async function generateJsonSchemaAction(options: GenerateJsonSchemaOption
   const spinner = ora('Loading JSON Schema specifications...').start();
 
   try {
+    // Clean output directory if requested
+    if (options.clean && fs.existsSync(options.output)) {
+      spinner.text = 'Cleaning output directory...';
+      fs.rmSync(options.output, { recursive: true, force: true });
+      Logger.debug(`Cleaned output directory: ${options.output}`);
+    }
+
     // Parse headers
     const headers = options.header ? parseHeaders(options.header) : {};
     Logger.debug(`Headers: ${JSON.stringify(headers)}`);
@@ -200,4 +210,5 @@ export const generateJsonSchemaCommand = new Command('generate-jsonschema')
   .addOption(exportStyleOption())
   .addOption(bareOption())
   .addOption(timeoutOption())
+  .addOption(cleanOption())
   .action(generateJsonSchemaAction);

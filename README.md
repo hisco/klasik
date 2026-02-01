@@ -23,7 +23,7 @@ Perfect for:
 🎭 **Custom Templates** - Mustache-based customization
 ⚙️ **Flexible Output** - Multiple export styles (namespace, direct, both)
 🌐 **HTTP Client Choice** - Generate with Axios (default) or native Fetch API
-🧪 **Well Tested** - Comprehensive test coverage (1038+ passing tests)
+🧪 **Well Tested** - Comprehensive test coverage (1039+ passing tests)
 🚀 **Production Ready** - Used in real-world projects
 📝 **Full CLI** - Rich command-line interface with 4 commands
 🔐 **Authentication** - Custom headers including Bearer tokens
@@ -723,6 +723,7 @@ klasik generate [options]
 | `--template <dir>` | Custom template directory | - |
 | `--keep-spec` | Keep downloaded spec file(s) | `false` |
 | `--export-style <style>` | Export style: `namespace`, `direct`, `both`, `none` | `namespace` |
+| `--clean` | Remove output directory before generation | `false` |
 
 **Examples:**
 
@@ -856,6 +857,7 @@ klasik generate-crd [options]
 | `--template <dir>` | Custom template directory | - |
 | `--keep-spec` | Keep downloaded spec file(s) | `false` |
 | `--timeout <ms>` | Request timeout | `30000` |
+| `--clean` | Remove output directory before generation | `false` |
 
 **Examples:**
 
@@ -926,6 +928,7 @@ klasik generate-jsonschema [options]
 | `--template <dir>` | Custom template directory | - |
 | `--keep-spec` | Keep intermediate OpenAPI specs | `false` |
 | `--timeout <ms>` | Request timeout | `30000` |
+| `--clean` | Remove output directory before generation | `false` |
 
 **Examples:**
 
@@ -980,6 +983,7 @@ klasik generate-go [options]
 | `--bare` | Generate models directly in output dir | `false` |
 | `--go-tool-path <path>` | Path to go-schema-gen binary | auto-detected |
 | `--allow-additional-properties` | Allow additional properties in JSON Schema | `false` |
+| `--clean` | Remove output directory before generation | `false` |
 
 **Prerequisites:**
 - Go 1.21+ must be installed (first-time setup is automatic)

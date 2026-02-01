@@ -130,6 +130,13 @@ export function httpClientOption(): Option {
 }
 
 /**
+ * Clean output directory option builder
+ */
+export function cleanOption(): Option {
+  return new Option('--clean', 'Remove output directory before generation').default(false);
+}
+
+/**
  * CRD kind case option builder
  */
 export function crdKindCaseOption(): Option {

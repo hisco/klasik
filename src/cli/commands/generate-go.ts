@@ -20,8 +20,10 @@ import {
   templateOption,
   exportStyleOption,
   bareOption,
+  cleanOption,
   collectValues,
 } from '../utils/options';
+import * as fs from 'fs';
 
 export interface GenerateGoOptions {
   type: string[];
@@ -35,6 +37,7 @@ export interface GenerateGoOptions {
   bare?: boolean;
   goToolPath?: string;
   allowAdditionalProperties?: boolean;
+  clean?: boolean;
 }
 
 /**
@@ -80,6 +83,13 @@ export async function generateGoAction(options: GenerateGoOptions): Promise<void
   const spinner = ora('Loading Go types...').start();
 
   try {
+    // Clean output directory if requested
+    if (options.clean && fs.existsSync(options.output)) {
+      spinner.text = 'Cleaning output directory...';
+      fs.rmSync(options.output, { recursive: true, force: true });
+      Logger.debug(`Cleaned output directory: ${options.output}`);
+    }
+
     Logger.debug(`Loading ${options.type.length} Go type(s)...`);
 
     // Load all Go types as JSON Schemas
@@ -164,6 +174,7 @@ export const generateGoCommand = new Command('generate-go')
   .addOption(templateOption())
   .addOption(exportStyleOption())
   .addOption(bareOption())
+  .addOption(cleanOption())
   .option('--go-tool-path <path>', 'Path to go-schema-gen binary (default: bundled)')
   .option('--allow-additional-properties', 'Allow additional properties in JSON Schema')
   .action(generateGoAction);

@@ -15,6 +15,7 @@ import {
   crdKindCaseOption,
   includeStatusOption,
   httpClientOption,
+  cleanOption,
   parseHeaders,
   collectValues,
   validateTimeout,
@@ -193,6 +194,16 @@ describe('Options', () => {
       const option = httpClientOption();
 
       expect(option.defaultValue).toBe('axios');
+    });
+  });
+
+  describe('cleanOption', () => {
+    it('should create clean option with default false', () => {
+      const option = cleanOption();
+
+      expect(option).toBeInstanceOf(Option);
+      expect(option.flags).toContain('--clean');
+      expect(option.defaultValue).toBe(false);
     });
   });
 
