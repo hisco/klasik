@@ -245,6 +245,9 @@ export class ZodValidatorPlugin implements GeneratorPlugin {
 
   /**
    * Apply format-specific validations
+   *
+   * Maps OpenAPI/JSON Schema format values to Zod validation methods.
+   * See: https://swagger.io/docs/specification/data-models/data-types/
    */
   private applyFormatValidations(
     schema: string,
@@ -253,12 +256,22 @@ export class ZodValidatorPlugin implements GeneratorPlugin {
   ): string {
     if (!format) return schema;
 
-    // Only apply to string types
+    // Handle numeric formats (int32, int64)
+    if (type.kind === 'primitive' && type.name === 'number') {
+      switch (format) {
+        case 'int32':
+        case 'int64':
+          return schema + '.int()';
+      }
+    }
+
+    // String formats
     if (type.kind !== 'primitive' || type.name !== 'string') {
       return schema;
     }
 
     switch (format) {
+      // Common string formats
       case 'email':
         return schema + '.email()';
       case 'url':
@@ -266,20 +279,33 @@ export class ZodValidatorPlugin implements GeneratorPlugin {
         return schema + '.url()';
       case 'uuid':
         return schema + '.uuid()';
+
+      // Date formats
       case 'date-time':
         return schema + '.datetime()';
       case 'date':
         return schema + '.date()';
+
+      // Binary/encoded formats
+      case 'byte':
+        // Base64-encoded string
+        return schema + '.base64()';
+
+      // Network formats
       case 'ipv4':
         return schema + ".ip({ version: 'v4' })";
       case 'ipv6':
         return schema + ".ip({ version: 'v6' })";
+      // Note: 'hostname' format not supported by Zod - would need custom regex
+
+      // Zod-specific formats
       case 'cuid':
         return schema + '.cuid()';
       case 'cuid2':
         return schema + '.cuid2()';
       case 'ulid':
         return schema + '.ulid()';
+
       default:
         return schema;
     }

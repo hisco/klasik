@@ -403,6 +403,146 @@ describe('ZodValidatorPlugin', () => {
 
       expect(content).toContain('z.string().datetime()');
     });
+
+    it('should add .base64() for byte format', () => {
+      const properties = new Map<string, PropertyDefinition>();
+      properties.set('content', createProperty({
+        name: 'content',
+        originalName: 'content',
+        type: { kind: 'primitive', name: 'string' },
+        required: true,
+        format: 'byte'
+      }));
+
+      const schema = createSchema({
+        name: 'Data',
+        originalName: 'Data',
+        properties
+      });
+      const ir = createIR([schema]);
+
+      const modelsDir = path.join(testOutputDir, 'models');
+      fs.mkdirSync(modelsDir, { recursive: true });
+
+      plugin.afterGeneration(context, ir);
+
+      const zodFile = path.join(modelsDir, 'data.zod.ts');
+      const content = fs.readFileSync(zodFile, 'utf-8');
+
+      expect(content).toContain('z.string().base64()');
+    });
+
+    it('should add .ip() with version v4 for ipv4 format', () => {
+      const properties = new Map<string, PropertyDefinition>();
+      properties.set('ipAddress', createProperty({
+        name: 'ipAddress',
+        originalName: 'ipAddress',
+        type: { kind: 'primitive', name: 'string' },
+        required: true,
+        format: 'ipv4'
+      }));
+
+      const schema = createSchema({
+        name: 'Server',
+        originalName: 'Server',
+        properties
+      });
+      const ir = createIR([schema]);
+
+      const modelsDir = path.join(testOutputDir, 'models');
+      fs.mkdirSync(modelsDir, { recursive: true });
+
+      plugin.afterGeneration(context, ir);
+
+      const zodFile = path.join(modelsDir, 'server.zod.ts');
+      const content = fs.readFileSync(zodFile, 'utf-8');
+
+      expect(content).toContain(".ip({ version: 'v4' })");
+    });
+
+    it('should add .ip() with version v6 for ipv6 format', () => {
+      const properties = new Map<string, PropertyDefinition>();
+      properties.set('ipv6Address', createProperty({
+        name: 'ipv6Address',
+        originalName: 'ipv6Address',
+        type: { kind: 'primitive', name: 'string' },
+        required: true,
+        format: 'ipv6'
+      }));
+
+      const schema = createSchema({
+        name: 'Server',
+        originalName: 'Server',
+        properties
+      });
+      const ir = createIR([schema]);
+
+      const modelsDir = path.join(testOutputDir, 'models');
+      fs.mkdirSync(modelsDir, { recursive: true });
+
+      plugin.afterGeneration(context, ir);
+
+      const zodFile = path.join(modelsDir, 'server.zod.ts');
+      const content = fs.readFileSync(zodFile, 'utf-8');
+
+      expect(content).toContain(".ip({ version: 'v6' })");
+    });
+
+    it('should add .int() for int32 format on number type', () => {
+      const properties = new Map<string, PropertyDefinition>();
+      properties.set('count', createProperty({
+        name: 'count',
+        originalName: 'count',
+        type: { kind: 'primitive', name: 'number' },
+        required: true,
+        format: 'int32'
+      }));
+
+      const schema = createSchema({
+        name: 'Counter',
+        originalName: 'Counter',
+        properties
+      });
+      const ir = createIR([schema]);
+
+      const modelsDir = path.join(testOutputDir, 'models');
+      fs.mkdirSync(modelsDir, { recursive: true });
+
+      plugin.afterGeneration(context, ir);
+
+      const zodFile = path.join(modelsDir, 'counter.zod.ts');
+      const content = fs.readFileSync(zodFile, 'utf-8');
+
+      expect(content).toContain('z.number().int()');
+    });
+
+    it('should add .int() for int64 format on number type', () => {
+      const properties = new Map<string, PropertyDefinition>();
+      properties.set('bigCount', createProperty({
+        name: 'bigCount',
+        originalName: 'bigCount',
+        type: { kind: 'primitive', name: 'number' },
+        required: true,
+        format: 'int64'
+      }));
+
+      const schema = createSchema({
+        name: 'Counter',
+        originalName: 'Counter',
+        properties
+      });
+      const ir = createIR([schema]);
+
+      const modelsDir = path.join(testOutputDir, 'models');
+      fs.mkdirSync(modelsDir, { recursive: true });
+
+      plugin.afterGeneration(context, ir);
+
+      const zodFile = path.join(modelsDir, 'counter.zod.ts');
+      const content = fs.readFileSync(zodFile, 'utf-8');
+
+      expect(content).toContain('z.number().int()');
+    });
   });
 
   describe('Constraint Validations', () => {
