@@ -14,7 +14,7 @@ Perfect for:
 ✨ **Easy to Use** - Single CLI command to generate types
 🎯 **Type-Safe** - Full TypeScript support with strict typing
 🔄 **class-transformer** - Automatic serialization/deserialization
-✅ **class-validator** - Built-in validation decorators
+✅ **class-validator** - Built-in validation decorators (email, URL, UUID, date, IP, hostname, etc.)
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🛡️ **Zod Schemas** - Generate Zod validation schemas for runtime type safety
 🎨 **NestJS Ready** - @ApiProperty decorators out of the box
