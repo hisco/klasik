@@ -1,6 +1,6 @@
 {
   "name": "klasik",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "TypeScript code generator from OpenAPI/CRD/JSON Schema/Go structs - rebuilt from ground up with AST-based generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

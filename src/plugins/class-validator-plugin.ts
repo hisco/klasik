@@ -149,6 +149,9 @@ export class ClassValidatorPlugin implements GeneratorPlugin {
 
   /**
    * Add format-based validators (email, url, uuid, etc.)
+   *
+   * Maps OpenAPI format values to appropriate class-validator decorators.
+   * See: https://swagger.io/docs/specification/data-models/data-types/
    */
   private addFormatValidators(
     property: PropertyDeclaration,
@@ -160,6 +163,7 @@ export class ClassValidatorPlugin implements GeneratorPlugin {
     }
 
     switch (propertyDef.format.toLowerCase()) {
+      // String formats
       case 'email':
         context.importManager.addImport('class-validator', 'IsEmail');
         property.addDecorator({ name: 'IsEmail', arguments: [] });
@@ -176,13 +180,58 @@ export class ClassValidatorPlugin implements GeneratorPlugin {
         property.addDecorator({ name: 'IsUUID', arguments: [] });
         break;
 
+      // Date formats - use IsDateString/IsISO8601 for string types (OpenAPI date-time is always a string)
       case 'date':
       case 'date-time':
-        context.importManager.addImport('class-validator', 'IsDate');
-        property.addDecorator({ name: 'IsDate', arguments: [] });
+        context.importManager.addImport('class-validator', 'IsDateString');
+        property.addDecorator({ name: 'IsDateString', arguments: [] });
         break;
 
-      // Other formats could be added here
+      // Binary/encoded formats
+      case 'byte':
+        // Base64-encoded string
+        context.importManager.addImport('class-validator', 'IsBase64');
+        property.addDecorator({ name: 'IsBase64', arguments: [] });
+        break;
+
+      case 'binary':
+        // Binary data - no specific string validator needed
+        // This is typically handled as file upload, not validated as string
+        break;
+
+      // Network formats
+      case 'hostname':
+        context.importManager.addImport('class-validator', 'IsFQDN');
+        property.addDecorator({ name: 'IsFQDN', arguments: [] });
+        break;
+
+      case 'ipv4':
+        context.importManager.addImport('class-validator', 'IsIP');
+        property.addDecorator({ name: 'IsIP', arguments: ["'4'"] });
+        break;
+
+      case 'ipv6':
+        context.importManager.addImport('class-validator', 'IsIP');
+        property.addDecorator({ name: 'IsIP', arguments: ["'6'"] });
+        break;
+
+      // Integer formats (for number types)
+      case 'int32':
+      case 'int64':
+        context.importManager.addImport('class-validator', 'IsInt');
+        property.addDecorator({ name: 'IsInt', arguments: [] });
+        break;
+
+      // Float formats - @IsNumber is already added by type validator
+      case 'float':
+      case 'double':
+        // No additional decorator needed - @IsNumber covers this
+        break;
+
+      // Password hint - no validation beyond string type
+      case 'password':
+        // Just a hint for UI/docs, no special validation
+        break;
     }
   }
 

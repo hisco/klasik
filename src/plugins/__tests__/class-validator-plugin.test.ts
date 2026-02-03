@@ -499,7 +499,7 @@ describe('ClassValidatorPlugin', () => {
       expect(propertyDecl.getDecorator('IsUUID')).toBeDefined();
     });
 
-    it('should add @IsDate for date format', () => {
+    it('should add @IsDateString for date format', () => {
       const sourceFile = project.createSourceFile(
         'test.ts',
         'export class User {}'
@@ -507,7 +507,7 @@ describe('ClassValidatorPlugin', () => {
       const classDecl = sourceFile.getClass('User')!;
       const propertyDecl = classDecl.addProperty({
         name: 'birthdate',
-        type: 'Date',
+        type: 'string',
       });
 
       const schema = IRHelpers.createSchema('User');
@@ -519,10 +519,10 @@ describe('ClassValidatorPlugin', () => {
 
       plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
 
-      expect(propertyDecl.getDecorator('IsDate')).toBeDefined();
+      expect(propertyDecl.getDecorator('IsDateString')).toBeDefined();
     });
 
-    it('should add @IsDate for date-time format', () => {
+    it('should add @IsDateString for date-time format', () => {
       const sourceFile = project.createSourceFile(
         'test.ts',
         'export class User {}'
@@ -530,7 +530,7 @@ describe('ClassValidatorPlugin', () => {
       const classDecl = sourceFile.getClass('User')!;
       const propertyDecl = classDecl.addProperty({
         name: 'createdAt',
-        type: 'Date',
+        type: 'string',
       });
 
       const schema = IRHelpers.createSchema('User');
@@ -542,7 +542,149 @@ describe('ClassValidatorPlugin', () => {
 
       plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
 
-      expect(propertyDecl.getDecorator('IsDate')).toBeDefined();
+      expect(propertyDecl.getDecorator('IsDateString')).toBeDefined();
+    });
+
+    it('should add @IsBase64 for byte format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Data {}'
+      );
+      const classDecl = sourceFile.getClass('Data')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'content',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Data');
+      const propertyDef = createPropertyWithOptions(
+        'content',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        { required: true, format: 'byte' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      expect(propertyDecl.getDecorator('IsBase64')).toBeDefined();
+    });
+
+    it('should add @IsFQDN for hostname format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Server {}'
+      );
+      const classDecl = sourceFile.getClass('Server')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'host',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Server');
+      const propertyDef = createPropertyWithOptions(
+        'host',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        { required: true, format: 'hostname' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      expect(propertyDecl.getDecorator('IsFQDN')).toBeDefined();
+    });
+
+    it('should add @IsIP with version 4 for ipv4 format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Server {}'
+      );
+      const classDecl = sourceFile.getClass('Server')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'ipAddress',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Server');
+      const propertyDef = createPropertyWithOptions(
+        'ipAddress',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        { required: true, format: 'ipv4' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const isIpDecorator = propertyDecl.getDecorator('IsIP');
+      expect(isIpDecorator).toBeDefined();
+      expect(isIpDecorator!.getText()).toContain("'4'");
+    });
+
+    it('should add @IsIP with version 6 for ipv6 format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Server {}'
+      );
+      const classDecl = sourceFile.getClass('Server')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'ipv6Address',
+        type: 'string',
+      });
+
+      const schema = IRHelpers.createSchema('Server');
+      const propertyDef = createPropertyWithOptions(
+        'ipv6Address',
+        IRHelpers.createTypeReference('primitive', 'string'),
+        { required: true, format: 'ipv6' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const isIpDecorator = propertyDecl.getDecorator('IsIP');
+      expect(isIpDecorator).toBeDefined();
+      expect(isIpDecorator!.getText()).toContain("'6'");
+    });
+
+    it('should add @IsInt for int32 format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Data {}'
+      );
+      const classDecl = sourceFile.getClass('Data')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'count',
+        type: 'number',
+      });
+
+      const schema = IRHelpers.createSchema('Data');
+      const propertyDef = createPropertyWithOptions(
+        'count',
+        IRHelpers.createTypeReference('primitive', 'number'),
+        { required: true, format: 'int32' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      expect(propertyDecl.getDecorator('IsInt')).toBeDefined();
+    });
+
+    it('should add @IsInt for int64 format', () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'export class Data {}'
+      );
+      const classDecl = sourceFile.getClass('Data')!;
+      const propertyDecl = classDecl.addProperty({
+        name: 'bigCount',
+        type: 'number',
+      });
+
+      const schema = IRHelpers.createSchema('Data');
+      const propertyDef = createPropertyWithOptions(
+        'bigCount',
+        IRHelpers.createTypeReference('primitive', 'number'),
+        { required: true, format: 'int64' }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      expect(propertyDecl.getDecorator('IsInt')).toBeDefined();
     });
   });
 

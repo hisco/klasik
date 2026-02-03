@@ -541,9 +541,9 @@ describe('E2E: HTTP Client Runtime', () => {
         expect((response.data[0] as any).assignee.email).toBe('alice@example.com');
 
         // Verify validation decorators work on transformed instances
+        // With @IsDateString, ISO 8601 date strings should validate correctly
         const errors = await validate(response.data[0] as object);
-        // The createdAt field is a string but @IsDate expects Date instance, so allow 1 error
-        expect(errors.length).toBeLessThanOrEqual(1);
+        expect(errors.length).toBe(0);
       } catch (error) {
         console.error('Test failed:', error);
         throw error;
@@ -1016,59 +1016,115 @@ describe('E2E: HTTP Client Runtime', () => {
     }, 120000);
 
     it('should call onResponseValidationError callback when validation fails', async () => {
-      // Generate code
-      const parser = new OpenAPIParser();
-      const ir = parser.parse(spec, { includeOperations: true });
+      // Create a spec with a field that will have invalid data in the response
+      const invalidDataSpec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/items': {
+            get: {
+              operationId: 'listItems',
+              tags: ['items'],
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: {
+                        type: 'array',
+                        items: { $ref: '#/components/schemas/Item' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        components: {
+          schemas: {
+            Item: {
+              type: 'object',
+              required: ['id', 'email'],
+              properties: {
+                id: { type: 'string' },
+                // email format validation will fail when given a non-email string
+                email: { type: 'string', format: 'email' }
+              }
+            }
+          }
+        }
+      };
 
-      const generator = new Generator({
-        outputDir: tempDir,
-        mode: 'full',
-        esm: false,
-        classValidator: true,
-        nestJsSwagger: false
+      // Create a mock server that returns invalid data
+      const invalidServer = http.createServer((req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        // Return items with invalid email format
+        res.end(JSON.stringify([
+          { id: '1', email: 'not-an-email' },
+          { id: '2', email: 'also-invalid' }
+        ]));
       });
 
-      await generator.generate(ir);
+      const INVALID_PORT = TEST_PORT + 1;
+      await new Promise<void>((resolve) => invalidServer.listen(INVALID_PORT, resolve));
 
-      // Create symlink
-      const nodeModulesLink = path.join(tempDir, 'node_modules');
-      const projectNodeModules = path.join(process.cwd(), 'node_modules');
-      if (!fs.existsSync(nodeModulesLink)) {
-        fs.symlinkSync(projectNodeModules, nodeModulesLink, 'dir');
+      try {
+        // Generate code
+        const parser = new OpenAPIParser();
+        const ir = parser.parse(invalidDataSpec, { includeOperations: true });
+
+        const generator = new Generator({
+          outputDir: tempDir,
+          mode: 'full',
+          esm: false,
+          classValidator: true,
+          nestJsSwagger: false
+        });
+
+        await generator.generate(ir);
+
+        // Create symlink
+        const nodeModulesLink = path.join(tempDir, 'node_modules');
+        const projectNodeModules = path.join(process.cwd(), 'node_modules');
+        if (!fs.existsSync(nodeModulesLink)) {
+          fs.symlinkSync(projectNodeModules, nodeModulesLink, 'dir');
+        }
+
+        // Import generated code
+        const ItemsApiModule = require(path.join(tempDir, 'apis', 'items-api.ts'));
+        const ConfigurationModule = require(path.join(tempDir, 'configuration.ts'));
+
+        const ItemsApi = ItemsApiModule.ItemsApi;
+        const Configuration = ConfigurationModule.Configuration;
+
+        const errorCallback = jest.fn();
+
+        // Create API client with validation and error callback
+        const config = new Configuration({
+          basePath: `http://localhost:${INVALID_PORT}`,
+          enableResponseTransformation: true,
+          enableResponseValidation: true,
+          onResponseValidationError: errorCallback
+        });
+        const api = new ItemsApi(config, axios.create());
+
+        // Make request - validation should fail due to invalid email format
+        await api.listItems();
+
+        // Callback should be called once for each item (2 items with email validation errors)
+        expect(errorCallback).toHaveBeenCalled();
+        expect(errorCallback).toHaveBeenCalledTimes(2);
+
+        // Verify error structure for first call
+        const firstCall = errorCallback.mock.calls[0];
+        expect(firstCall[0]).toBeInstanceOf(Array); // errors array
+        expect(firstCall[0].length).toBeGreaterThan(0);
+        expect(firstCall[0][0].property).toBe('email');
+        expect(firstCall[0][0].constraints).toHaveProperty('isEmail');
+      } finally {
+        await new Promise<void>((resolve) => invalidServer.close(() => resolve()));
       }
-
-      // Import generated code
-      const TasksApiModule = require(path.join(tempDir, 'apis', 'tasks-api.ts'));
-      const ConfigurationModule = require(path.join(tempDir, 'configuration.ts'));
-
-      const TasksApi = TasksApiModule.TasksApi;
-      const Configuration = ConfigurationModule.Configuration;
-
-      const errorCallback = jest.fn();
-
-      // Create API client with validation and error callback
-      const config = new Configuration({
-        basePath: `http://localhost:${TEST_PORT}`,
-        enableResponseTransformation: true,
-        enableResponseValidation: true,
-        onResponseValidationError: errorCallback
-      });
-      const api = new TasksApi(config, axios.create());
-
-      // The mock data has date strings, but @IsDate expects Date instances
-      // So validation will fail and callback will be called
-      await api.listTasks();
-
-      // Callback should be called once for each task (3 tasks with date validation errors)
-      expect(errorCallback).toHaveBeenCalled();
-      expect(errorCallback).toHaveBeenCalledTimes(3);
-
-      // Verify error structure for first call
-      const firstCall = errorCallback.mock.calls[0];
-      expect(firstCall[0]).toBeInstanceOf(Array); // errors array
-      expect(firstCall[0].length).toBeGreaterThan(0);
-      expect(firstCall[0][0].property).toBe('createdAt');
-      expect(firstCall[0][0].constraints).toHaveProperty('isDate');
     }, 120000);
 
     it('should skip validation when enableResponseValidation=false (default)', async () => {

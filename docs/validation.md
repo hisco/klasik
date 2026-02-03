@@ -63,9 +63,13 @@ When `--class-validator` is enabled, Klasik generates:
 
 ### Format Validators
 - `@IsEmail()` - Email format
-- `@IsUrl()` - URL format
+- `@IsUrl()` - URL/URI format
 - `@IsUUID()` - UUID format
-- `@IsDate()` - Date/datetime format
+- `@IsDateString()` - Date/datetime format (ISO 8601 strings)
+- `@IsBase64()` - Base64-encoded byte format
+- `@IsFQDN()` - Hostname format
+- `@IsIP('4')` / `@IsIP('6')` - IPv4/IPv6 format
+- `@IsInt()` - Integer format (int32/int64)
 
 ### Constraint Validators
 - `@Min(n)` / `@Max(n)` - Numeric ranges
