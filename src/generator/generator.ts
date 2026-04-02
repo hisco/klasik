@@ -19,6 +19,7 @@ import { NestJSSwaggerPlugin } from '../plugins/nestjs-swagger-plugin';
 import { ClassValidatorPlugin } from '../plugins/class-validator-plugin';
 import { AjvValidatorPlugin } from '../plugins/ajv-validator-plugin';
 import { ZodValidatorPlugin } from '../plugins/zod-validator-plugin';
+import { NestJSGraphQLPlugin } from '../plugins/nestjs-graphql-plugin';
 import { toKebabCase, toSnakeCase, toPascalCase, toCamelCase } from '../utils/name-utils';
 import { ExportStyleManager } from './export-style-manager';
 
@@ -389,6 +390,10 @@ export class Generator {
     // Conditional plugins
     if (this.options.nestJsSwagger) {
       this.pluginRegistry.register(new NestJSSwaggerPlugin());
+    }
+
+    if (this.options.nestJsGraphql) {
+      this.pluginRegistry.register(new NestJSGraphQLPlugin());
     }
 
     if (this.options.classValidator) {

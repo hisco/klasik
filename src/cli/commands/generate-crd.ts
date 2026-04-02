@@ -20,6 +20,7 @@ import {
   resolveRefsOption,
   esmOption,
   nestjsSwaggerOption,
+  nestjsGraphqlOption,
   classValidatorOption,
   useAjvOption,
   useZodOption,
@@ -42,6 +43,7 @@ export interface GenerateCrdOptions {
   output: string;
   includeStatus?: boolean;
   nestjsSwagger?: boolean;
+  nestjsGraphql?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
   useZod?: boolean;
@@ -199,6 +201,7 @@ export async function generateCrdAction(options: GenerateCrdOptions): Promise<vo
       outputDir: options.output,
       esm: options.esm,
       nestJsSwagger: options.nestjsSwagger,
+      nestJsGraphql: options.nestjsGraphql,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
       useZod: options.useZod,
@@ -231,6 +234,7 @@ export const generateCrdCommand = new Command('generate-crd')
   .addOption(includeOption())
   .addOption(includeStatusOption())
   .addOption(nestjsSwaggerOption())
+  .addOption(nestjsGraphqlOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
   .addOption(useZodOption())

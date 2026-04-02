@@ -15,6 +15,7 @@ import {
   outputOption,
   esmOption,
   nestjsSwaggerOption,
+  nestjsGraphqlOption,
   classValidatorOption,
   useAjvOption,
   useZodOption,
@@ -30,6 +31,7 @@ export interface GenerateGoOptions {
   type: string[];
   output: string;
   nestjsSwagger?: boolean;
+  nestjsGraphql?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
   useZod?: boolean;
@@ -142,6 +144,7 @@ export async function generateGoAction(options: GenerateGoOptions): Promise<void
       outputDir: options.output,
       esm: options.esm,
       nestJsSwagger: options.nestjsSwagger,
+      nestJsGraphql: options.nestjsGraphql,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
       useZod: options.useZod,
@@ -171,6 +174,7 @@ export const generateGoCommand = new Command('generate-go')
   .requiredOption('-t, --type <type>', 'Go type path (package.Type) (repeatable)', collectValues, [])
   .addOption(outputOption('Output directory'))
   .addOption(nestjsSwaggerOption())
+  .addOption(nestjsGraphqlOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
   .addOption(useZodOption())

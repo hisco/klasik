@@ -18,6 +18,7 @@ import {
   timeoutOption,
   esmOption,
   nestjsSwaggerOption,
+  nestjsGraphqlOption,
   classValidatorOption,
   useAjvOption,
   useZodOption,
@@ -30,6 +31,7 @@ import {
   httpClientOption,
   cleanOption,
   renameModelOption,
+  parameterStyleOption,
   parseHeaders,
   collectValues,
   parseRenameModelValues,
@@ -45,6 +47,7 @@ export interface GenerateOptions {
   resolveRefs?: boolean;
   esm?: boolean;
   nestjsSwagger?: boolean;
+  nestjsGraphql?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
   useZod?: boolean;
@@ -57,6 +60,7 @@ export interface GenerateOptions {
   httpClient?: 'axios' | 'fetch';
   clean?: boolean;
   renameModel?: string[];
+  parameterStyle?: 'positional' | 'object-flat';
 }
 
 export async function generateAction(options: GenerateOptions): Promise<void> {
@@ -144,6 +148,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       outputDir: options.output,
       esm: options.esm && !options.skipJsExtensions,
       nestJsSwagger: options.nestjsSwagger,
+      nestJsGraphql: options.nestjsGraphql,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
       useZod: options.useZod,
@@ -152,6 +157,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       mode: options.mode,
       templateDir: options.template,
       httpClient: options.httpClient,
+      parameterStyle: options.parameterStyle,
     });
 
     await generator.generate(ir);
@@ -181,6 +187,7 @@ export const generateCommand = new Command('generate')
   .addOption(resolveRefsOption())
   .addOption(esmOption())
   .addOption(nestjsSwaggerOption())
+  .addOption(nestjsGraphqlOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
   .addOption(useZodOption())
@@ -191,6 +198,7 @@ export const generateCommand = new Command('generate')
   .addOption(bareOption())
   .addOption(skipJsExtensionsOption())
   .addOption(httpClientOption())
+  .addOption(parameterStyleOption())
   .addOption(cleanOption())
   .addOption(renameModelOption())
   .action(generateAction);

@@ -43,6 +43,7 @@ export {
 // Built-in plugins
 export { ClassTransformerPlugin } from './plugins/class-transformer-plugin';
 export { NestJSSwaggerPlugin } from './plugins/nestjs-swagger-plugin';
+export { NestJSGraphQLPlugin } from './plugins/nestjs-graphql-plugin';
 export { ClassValidatorPlugin } from './plugins/class-validator-plugin';
 
 // Utils
