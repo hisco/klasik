@@ -17,7 +17,7 @@ Perfect for:
 ✅ **class-validator** - Built-in validation decorators (email, URL, UUID, date, IP, hostname, etc.)
 📋 **Ajv JSON Schema** - Draft 2020-12 validation with deep nesting support
 🛡️ **Zod Schemas** - Generate Zod validation schemas for runtime type safety
-🎨 **NestJS Ready** - @ApiProperty decorators out of the box
+🎨 **NestJS Ready** - @ApiProperty and @ObjectType/@Field decorators out of the box
 📦 **Multiple Formats** - OpenAPI 3.x, Swagger 2.0 (auto-converted), Kubernetes CRDs, JSON Schema, Go structs
 🌐 **ESM Support** - Modern JavaScript modules with .js extensions
 🔗 **External $refs** - Automatic resolution of external schemas
@@ -968,6 +968,7 @@ klasik generate [options]
 | `--esm` | Add .js extensions for ESM compatibility | `false` |
 | `--skip-js-extensions` | Skip .js extensions (for bundlers) | `false` |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
+| `--nestjs-graphql` | Add @ObjectType/@Field decorators for GraphQL | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--use-zod` | Generate Zod validation schemas | `false` |
@@ -1102,6 +1103,7 @@ klasik generate-crd [options]
 | `--include-status` | Generate status schemas | `false` |
 | `--crd-kind-case <format>` | Folder naming: `pascal`, `snake`, `kebab` | `pascal` |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
+| `--nestjs-graphql` | Add @ObjectType/@Field decorators for GraphQL | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--use-zod` | Generate Zod validation schemas | `false` |
@@ -1174,6 +1176,7 @@ klasik generate-jsonschema [options]
 | `-u, --url <url>` | JSON Schema URL or file path (repeatable) | - |
 | `-o, --output <dir>` | Output directory (required) | - |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
+| `--nestjs-graphql` | Add @ObjectType/@Field decorators for GraphQL | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--use-zod` | Generate Zod validation schemas | `false` |
@@ -1230,6 +1233,7 @@ klasik generate-go [options]
 | `-t, --type <type>` | Go type path (package.Type) (repeatable, required) | - |
 | `-o, --output <dir>` | Output directory (required) | - |
 | `--nestjs-swagger` | Add @ApiProperty decorators | `false` |
+| `--nestjs-graphql` | Add @ObjectType/@Field decorators for GraphQL | `false` |
 | `--class-validator` | Add class-validator decorators | `false` |
 | `--use-ajv` | Add Ajv JSON Schema validation methods | `false` |
 | `--use-zod` | Generate Zod validation schemas | `false` |
@@ -1627,11 +1631,11 @@ Planned features for future releases:
 
 ## NestJS Integration
 
-Klasik integrates seamlessly with NestJS, generating models with `@ApiProperty` decorators for automatic Swagger/OpenAPI documentation and `class-validator` decorators for runtime validation.
+Klasik integrates seamlessly with NestJS, generating models with `@ApiProperty` decorators for automatic Swagger/OpenAPI documentation, `@ObjectType`/`@Field` decorators for GraphQL schemas, and `class-validator` decorators for runtime validation.
 
 ### Setup
 
-Generate models with NestJS support:
+Generate models with NestJS Swagger support:
 
 ```bash
 klasik generate \
@@ -1642,7 +1646,30 @@ klasik generate \
   --class-validator
 ```
 
-### Using in NestJS Controllers
+Generate models with NestJS GraphQL support:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./src/generated \
+  --mode models-only \
+  --nestjs-graphql \
+  --class-validator
+```
+
+You can also combine both Swagger and GraphQL decorators:
+
+```bash
+klasik generate \
+  --url https://api.example.com/openapi.json \
+  --output ./src/generated \
+  --mode models-only \
+  --nestjs-swagger \
+  --nestjs-graphql \
+  --class-validator
+```
+
+### Using in NestJS Controllers (REST)
 
 ```typescript
 import { Controller, Post, Body } from '@nestjs/common';
@@ -1662,7 +1689,28 @@ export class UsersController {
 }
 ```
 
-### Generated Model Example
+### Using in NestJS Resolvers (GraphQL)
+
+```typescript
+import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
+import { User } from './generated/models';
+
+@Resolver(() => User)
+export class UsersResolver {
+  @Query(() => [User])
+  async users() {
+    // User type is already decorated with @ObjectType and @Field
+    return this.usersService.findAll();
+  }
+
+  @Mutation(() => User)
+  async createUser(@Args('input') input: CreateUserInput) {
+    return this.usersService.create(input);
+  }
+}
+```
+
+### Generated Model Example (Swagger)
 
 ```typescript
 import { ApiProperty } from '@nestjs/swagger';
@@ -1702,6 +1750,54 @@ export class CreateUserDto {
   name?: string;
 }
 ```
+
+### Generated Model Example (GraphQL)
+
+```typescript
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
+import { Expose } from 'class-transformer';
+
+@ObjectType({ description: `A user entity in the system` })
+export class User {
+  @Expose()
+  @Field(() => ID, { description: `Unique identifier` })
+  id: string;
+
+  @Expose()
+  @Field(() => String, { description: `Full name of the user` })
+  name: string;
+
+  @Expose()
+  @Field(() => String, { nullable: true, description: `Email address` })
+  email?: string;
+
+  @Expose()
+  @Field(() => Int, { nullable: true, description: `Age in years` })
+  age?: number;
+
+  @Expose()
+  @Field(() => Boolean, { description: `Whether user is active` })
+  active: boolean;
+
+  @Expose()
+  @Field(() => [String], { nullable: true, description: `User tags` })
+  tags?: string[];
+}
+```
+
+The `--nestjs-graphql` flag maps OpenAPI types to GraphQL scalars:
+
+| OpenAPI Type | GraphQL Type |
+|-------------|-------------|
+| `string` | `String` |
+| `string` (format: `uuid`) | `ID` |
+| `integer` / `number` (format: `int32`, `int64`) | `Int` |
+| `number` (format: `float`, `double`, or default) | `Float` |
+| `boolean` | `Boolean` |
+| `array` | `[ElementType]` |
+| `$ref` | Referenced class name |
+
+Dictionary types (`additionalProperties`) and unions are skipped as they have no direct GraphQL representation. Deprecated fields automatically get `deprecationReason: "Deprecated"`.
 
 ## Advanced Topics
 

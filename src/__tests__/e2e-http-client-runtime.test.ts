@@ -405,7 +405,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -430,7 +431,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -465,7 +467,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -560,7 +563,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -609,7 +613,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -667,7 +672,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -720,7 +726,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -772,7 +779,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -822,7 +830,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -874,7 +883,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -928,7 +938,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -977,7 +988,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -1137,7 +1149,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -1184,7 +1197,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -1230,7 +1244,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -1280,7 +1295,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -1326,7 +1342,8 @@ describe('E2E: HTTP Client Runtime', () => {
         mode: 'full',
         esm: false,
         classValidator: true,
-        nestJsSwagger: false
+        nestJsSwagger: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);

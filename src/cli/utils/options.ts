@@ -63,6 +63,13 @@ export function nestjsSwaggerOption(): Option {
 }
 
 /**
+ * NestJS GraphQL option builder
+ */
+export function nestjsGraphqlOption(): Option {
+  return new Option('--nestjs-graphql', 'Add @ObjectType and @Field decorators for NestJS GraphQL').default(false);
+}
+
+/**
  * Class Validator option builder
  */
 export function classValidatorOption(): Option {
@@ -134,6 +141,15 @@ export function httpClientOption(): Option {
   return new Option('--http-client <client>', 'HTTP client to use for API requests')
     .choices(['axios', 'fetch'])
     .default('axios');
+}
+
+/**
+ * Parameter style option builder
+ */
+export function parameterStyleOption(): Option {
+  return new Option('--parameter-style <style>', 'API method parameter style: object-flat (recommended) or positional (legacy)')
+    .choices(['object-flat', 'positional'])
+    .default('object-flat');
 }
 
 /**

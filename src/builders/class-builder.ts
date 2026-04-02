@@ -46,6 +46,8 @@ export interface GeneratorOptions {
   skipJsExtensions?: boolean;
   bare?: boolean;
   httpClient?: 'axios' | 'fetch';
+  parameterStyle?: 'positional' | 'object-flat';
+  nestJsGraphql?: boolean;
 }
 
 /**

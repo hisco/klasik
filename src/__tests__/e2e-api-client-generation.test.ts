@@ -177,6 +177,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -247,6 +248,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -334,6 +336,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -386,6 +389,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -421,6 +425,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -467,6 +472,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -502,6 +508,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: true,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);
@@ -589,6 +596,7 @@ describe('E2E: API Client Generation', () => {
         outputDir: tempDir,
         mode: 'full',
         esm: false,
+        parameterStyle: 'positional',
       });
 
       await generator.generate(ir);

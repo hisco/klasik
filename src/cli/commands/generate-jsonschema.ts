@@ -19,6 +19,7 @@ import {
   resolveRefsOption,
   esmOption,
   nestjsSwaggerOption,
+  nestjsGraphqlOption,
   classValidatorOption,
   useAjvOption,
   useZodOption,
@@ -36,6 +37,7 @@ export interface GenerateJsonSchemaOptions {
   url: string[];
   output: string;
   nestjsSwagger?: boolean;
+  nestjsGraphql?: boolean;
   classValidator?: boolean;
   useAjv?: boolean;
   useZod?: boolean;
@@ -174,6 +176,7 @@ export async function generateJsonSchemaAction(options: GenerateJsonSchemaOption
       outputDir: options.output,
       esm: options.esm,
       nestJsSwagger: options.nestjsSwagger,
+      nestJsGraphql: options.nestjsGraphql,
       classValidator: options.classValidator,
       useAjv: options.useAjv,
       useZod: options.useZod,
@@ -203,6 +206,7 @@ export const generateJsonSchemaCommand = new Command('generate-jsonschema')
   .requiredOption('-u, --url <url>', 'JSON Schema URL or file path (repeatable)', collectValues, [])
   .addOption(outputOption('Output directory'))
   .addOption(nestjsSwaggerOption())
+  .addOption(nestjsGraphqlOption())
   .addOption(classValidatorOption())
   .addOption(useAjvOption())
   .addOption(useZodOption())
