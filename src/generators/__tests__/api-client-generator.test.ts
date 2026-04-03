@@ -571,6 +571,72 @@ describe('ApiClientGenerator', () => {
       );
     });
 
+    it('should generate discriminator-based branching for discriminated union responses', async () => {
+      const discriminatedOperation: OperationDefinition = {
+        operationId: 'getBlock',
+        method: 'GET',
+        path: '/blocks/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              description: 'Success',
+              content: new Map([
+                ['application/json', {
+                  kind: 'union' as const,
+                  unionTypes: [
+                    { kind: 'reference' as const, name: 'TextBlock' },
+                    { kind: 'reference' as const, name: 'ImageBlock' },
+                  ],
+                  discriminator: {
+                    propertyName: 'blockType',
+                    mapping: { text: 'TextBlock', image: 'ImageBlock' },
+                  },
+                }],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['blocks'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getBlock', discriminatedOperation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'blocks-api.ts'),
+        'utf-8'
+      );
+
+      // Should use discriminator-based branching, not a direct plainToInstance with union
+      expect(apiContent).toContain('_discriminatorMap');
+      expect(apiContent).toContain("'text': TextBlock");
+      expect(apiContent).toContain("'image': ImageBlock");
+      expect(apiContent).toContain('.blockType');
+      expect(apiContent).toContain('plainToInstance(_TargetClass');
+      // Should NOT have the invalid union form
+      expect(apiContent).not.toContain('plainToInstance(TextBlock | ImageBlock');
+    });
+
     it('should skip transformation for union responses when allowUnionResponses is set', async () => {
       const ir: SchemaIR = {
         schemas: new Map(),

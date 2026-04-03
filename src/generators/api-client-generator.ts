@@ -561,6 +561,7 @@ export class ApiClientGenerator {
     isPrimitive: boolean;
     baseType: string;
     fullType: string;
+    discriminator?: { propertyName: string; mapping: Record<string, string> };
   } {
     const successResponse = operation.responses.get('200') ||
                            operation.responses.get('201') ||
@@ -580,9 +581,38 @@ export class ApiClientGenerator {
     const isArray = typeRef.kind === 'array';
     const baseTypeRef = isArray ? typeRef.elementType! : typeRef;
 
-    // Union types (oneOf/anyOf) cannot be used with plainToInstance — the generated code
-    // would be `plainToInstance(TypeA | TypeB, data)` which is invalid at runtime.
+    // Union types (oneOf/anyOf) need special handling
     if (baseTypeRef.kind === 'union') {
+      if (baseTypeRef.discriminator?.propertyName) {
+        // Discriminated union — generate branching plainToInstance logic
+        const memberNames = (baseTypeRef.unionTypes || [])
+          .map(t => t.name)
+          .filter((n): n is string => !!n);
+        // Build mapping: use explicit mapping if available, otherwise use schema names
+        const mapping: Record<string, string> = {};
+        if (baseTypeRef.discriminator.mapping) {
+          for (const [key, value] of Object.entries(baseTypeRef.discriminator.mapping)) {
+            mapping[key] = value;
+          }
+        } else {
+          for (const name of memberNames) {
+            mapping[name] = name;
+          }
+        }
+
+        return {
+          hasResponse: true,
+          isArray,
+          isPrimitive: false,
+          baseType: this.tsDocGenerator.typeReferenceToString(baseTypeRef),
+          fullType: this.tsDocGenerator.typeReferenceToString(typeRef),
+          discriminator: {
+            propertyName: baseTypeRef.discriminator.propertyName,
+            mapping,
+          },
+        };
+      }
+
       if (!this.options.allowUnionResponses) {
         const unionTypes = baseTypeRef.unionTypes
           ? baseTypeRef.unionTypes.map(t => t.name || t.kind).join(' | ')
@@ -592,7 +622,7 @@ export class ApiClientGenerator {
           `Use --allow-union-responses to skip response transformation for union types, or refactor the spec to use a single response type.`
         );
       }
-      // User opted in — skip transformation for this response
+      // User opted in — skip transformation for non-discriminated union
       return {
         hasResponse: true,
         isArray,
@@ -621,6 +651,46 @@ export class ApiClientGenerator {
       baseType,
       fullType,
     };
+  }
+
+  /**
+   * Generate plainToInstance lines, with discriminator branching when available
+   */
+  private generatePlainToInstanceLines(
+    lines: string[],
+    responseInfo: { isArray: boolean; baseType: string; discriminator?: { propertyName: string; mapping: Record<string, string> } },
+    indent: string
+  ): void {
+    if (responseInfo.discriminator) {
+      const { propertyName, mapping } = responseInfo.discriminator;
+      const mapEntries = Object.entries(mapping)
+        .map(([key, cls]) => `  '${key}': ${cls}`)
+        .join(',\n' + indent);
+
+      if (responseInfo.isArray) {
+        lines.push(`${indent}const _discriminatorMap: Record<string, any> = {`);
+        lines.push(`${indent}${mapEntries}`);
+        lines.push(`${indent}};`);
+        lines.push(`${indent}response.data = (response.data as any[]).map((item: any) => {`);
+        lines.push(`${indent}  const _TargetClass = _discriminatorMap[item?.${propertyName}];`);
+        lines.push(`${indent}  return _TargetClass ? plainToInstance(_TargetClass, item) : item;`);
+        lines.push(`${indent}});`);
+      } else {
+        lines.push(`${indent}const _discriminatorMap: Record<string, any> = {`);
+        lines.push(`${indent}${mapEntries}`);
+        lines.push(`${indent}};`);
+        lines.push(`${indent}const _TargetClass = _discriminatorMap[(response.data as any)?.${propertyName}];`);
+        lines.push(`${indent}if (_TargetClass) {`);
+        lines.push(`${indent}  response.data = plainToInstance(_TargetClass, response.data);`);
+        lines.push(`${indent}}`);
+      }
+    } else {
+      if (responseInfo.isArray) {
+        lines.push(`${indent}response.data = plainToInstance(${responseInfo.baseType}, response.data as any[]);`);
+      } else {
+        lines.push(`${indent}response.data = plainToInstance(${responseInfo.baseType}, response.data);`);
+      }
+    }
   }
 
   /**
@@ -769,11 +839,7 @@ export class ApiClientGenerator {
       lines.push(`  if (this.configuration.enableResponseTransformation !== false) {`);
       lines.push(`    try {`);
 
-      if (responseInfo.isArray) {
-        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data as any[]);`);
-      } else {
-        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data);`);
-      }
+      this.generatePlainToInstanceLines(lines, responseInfo, '      ');
 
       lines.push(``);
       lines.push(`      if (this.configuration.enableResponseValidation === true) {`);
@@ -970,11 +1036,7 @@ export class ApiClientGenerator {
       lines.push(`  if (this.configuration.enableResponseTransformation !== false) {`);
       lines.push(`    try {`);
 
-      if (responseInfo.isArray) {
-        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data as any[]);`);
-      } else {
-        lines.push(`      response.data = plainToInstance(${responseInfo.baseType}, response.data);`);
-      }
+      this.generatePlainToInstanceLines(lines, responseInfo, '      ');
 
       // Add response validation logic
       lines.push(``);
