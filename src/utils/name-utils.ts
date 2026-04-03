@@ -10,6 +10,7 @@
  */
 export function toKebabCase(str: string): string {
   return str
+    .replace(/\s+/g, '-')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
     .toLowerCase();
@@ -31,10 +32,11 @@ export function toSnakeCase(str: string): string {
  * Example: "app-project" -> "AppProject", "AppProject" -> "AppProject"
  */
 export function toPascalCase(str: string): string {
-  // If the string contains hyphens or underscores, split on them
-  if (str.includes('-') || str.includes('_')) {
+  // If the string contains hyphens, underscores, or spaces, split on them
+  if (str.includes('-') || str.includes('_') || str.includes(' ')) {
     return str
-      .split(/[-_]/)
+      .split(/[-_\s]+/)
+      .filter(word => word.length > 0)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join('');
   }

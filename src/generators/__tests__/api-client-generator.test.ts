@@ -520,6 +520,103 @@ describe('ApiClientGenerator', () => {
     });
   });
 
+  describe('union response types', () => {
+    it('should not use plainToInstance for union (oneOf) response types', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getConfig',
+        method: 'GET',
+        path: '/configs/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              description: 'Success',
+              content: new Map([
+                ['application/json', {
+                  kind: 'union' as const,
+                  unionTypes: [
+                    { kind: 'reference' as const, name: 'ListResponse' },
+                    { kind: 'reference' as const, name: 'SingleResponse' },
+                  ],
+                }],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['configs'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getConfig', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'configs-api.ts'),
+        'utf-8'
+      );
+
+      // Should NOT call plainToInstance with union type — only import may remain
+      // The method body should use direct return (no transformation)
+      expect(apiContent).toContain('return this.axios.request(localVarRequestOptions);');
+      expect(apiContent).not.toContain('plainToInstance(ListResponse | SingleResponse');
+    });
+  });
+
+  describe('tag name sanitization', () => {
+    it('should handle tag names with spaces', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'listItems',
+        method: 'GET',
+        path: '/items',
+        parameters: [],
+        responses: new Map(),
+        tags: ['Helm Charts'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['listItems', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      // File should use kebab-case with spaces converted
+      expect(fs.existsSync(path.join(tempDir, 'apis', 'helm-charts-api.ts'))).toBe(true);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'helm-charts-api.ts'),
+        'utf-8'
+      );
+
+      // Class name should be PascalCase with no spaces
+      expect(apiContent).toContain('export class HelmChartsApi');
+    });
+  });
+
   describe('base and configuration generation', () => {
     it('should generate base.ts with RequiredError', async () => {
       const operation: OperationDefinition = {

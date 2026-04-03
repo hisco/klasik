@@ -580,8 +580,10 @@ export class ApiClientGenerator {
     const isArray = typeRef.kind === 'array';
     const baseTypeRef = isArray ? typeRef.elementType! : typeRef;
 
-    // Check if primitive (kind is 'primitive' for string, number, boolean, etc.)
+    // Check if primitive or union (kind is 'primitive' for string, number, boolean, etc.)
+    // Union types (oneOf/anyOf) cannot be used with plainToInstance — treat as primitive to skip transformation
     const isPrimitive = baseTypeRef.kind === 'primitive' ||
+                       baseTypeRef.kind === 'union' ||
                        (baseTypeRef.kind === 'reference' && !baseTypeRef.name) ||
                        (baseTypeRef.name === 'string' || baseTypeRef.name === 'number' ||
                         baseTypeRef.name === 'boolean' || baseTypeRef.name === 'any');

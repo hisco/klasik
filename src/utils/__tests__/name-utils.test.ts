@@ -50,6 +50,12 @@ describe('name-utils', () => {
       expect(toKebabCase('v1Alpha1')).toBe('v1-alpha1');
     });
 
+    it('should convert strings with spaces to kebab-case', () => {
+      expect(toKebabCase('Helm Charts')).toBe('helm-charts');
+      expect(toKebabCase('Cluster Issuer Configs')).toBe('cluster-issuer-configs');
+      expect(toKebabCase('hello world')).toBe('hello-world');
+    });
+
     it('should handle strings that are already kebab-case', () => {
       expect(toKebabCase('already-kebab-case')).toBe('already-kebab-case');
       expect(toKebabCase('my-file-name')).toBe('my-file-name');
@@ -170,6 +176,12 @@ describe('name-utils', () => {
     it('should handle mixed case input', () => {
       expect(toPascalCase('User-Profile')).toBe('UserProfile');
       expect(toPascalCase('myApp-Config')).toBe('MyappConfig');
+    });
+
+    it('should convert strings with spaces to PascalCase', () => {
+      expect(toPascalCase('Helm Charts')).toBe('HelmCharts');
+      expect(toPascalCase('Cluster Issuer Configs')).toBe('ClusterIssuerConfigs');
+      expect(toPascalCase('hello world')).toBe('HelloWorld');
     });
   });
 
