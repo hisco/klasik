@@ -745,10 +745,9 @@ export class ApiClientGenerator {
       }
     }
 
-    // Build request config
+    // Build request config — merge per-request headers from options with generated headers
     lines.push(`const requestConfig: RequestConfig = {`);
     lines.push(`  method: '${operation.method.toUpperCase()}',`);
-    lines.push(`  headers: localVarHeaderParameter,`);
     if (operation.requestBody) {
       lines.push(`  body: JSON.stringify(requestBody),`);
     }
@@ -756,6 +755,7 @@ export class ApiClientGenerator {
     lines.push(`  credentials: this.configuration.credentials,`);
     lines.push(`  mode: this.configuration.mode,`);
     lines.push(`  ...options,`);
+    lines.push(`  headers: { ...options?.headers, ...localVarHeaderParameter },`);
     lines.push(`};`);
     lines.push('');
 
@@ -910,8 +910,8 @@ export class ApiClientGenerator {
       lines.push('');
     }
 
-    // Set headers and URL
-    lines.push(`localVarRequestOptions.headers = localVarHeaderParameter;`);
+    // Set headers and URL — merge per-request headers from options with generated headers
+    lines.push(`localVarRequestOptions.headers = { ...options?.headers, ...localVarHeaderParameter };`);
     lines.push(`localVarRequestOptions.url = localVarUrlObj.toString();`);
     lines.push('');
 

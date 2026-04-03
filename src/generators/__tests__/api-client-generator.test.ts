@@ -634,6 +634,87 @@ describe('ApiClientGenerator', () => {
     });
   });
 
+  describe('per-request headers merging', () => {
+    it('should merge options.headers with generated headers in axios client', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getItem',
+        method: 'GET',
+        path: '/items/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map(),
+        tags: ['items'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getItem', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'items-api.ts'),
+        'utf-8'
+      );
+
+      // Should spread options.headers first, then generated headers on top
+      expect(apiContent).toContain('...options?.headers, ...localVarHeaderParameter');
+    });
+
+    it('should merge options.headers with generated headers in fetch client', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getItem',
+        method: 'GET',
+        path: '/items/{id}',
+        parameters: [
+          {
+            name: 'id',
+            in: 'path',
+            required: true,
+            type: { kind: 'primitive', name: 'string' },
+          },
+        ],
+        responses: new Map(),
+        tags: ['items'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getItem', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        httpClient: 'fetch',
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'items-api.ts'),
+        'utf-8'
+      );
+
+      // Should spread options.headers first, then generated headers on top
+      expect(apiContent).toContain('...options?.headers, ...localVarHeaderParameter');
+    });
+  });
+
   describe('base and configuration generation', () => {
     it('should generate base.ts with RequiredError', async () => {
       const operation: OperationDefinition = {
