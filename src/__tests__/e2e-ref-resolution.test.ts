@@ -743,6 +743,187 @@ properties:
     });
   });
 
+  describe('local file nested refs with fragments (customer reproduction)', () => {
+    /**
+     * Exact reproduction of customer-reported bug:
+     * api/
+     *   openapi.yaml          # $ref: './schemas/service.yaml#/components/schemas/Service'
+     *   schemas/
+     *     service.yaml        # $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
+     *     vcs.yaml            # defines WorkloadRepo
+     *
+     * Error was: Cannot inline ref "./vcs.yaml#/components/schemas/WorkloadRepo": not found in resolved refs
+     */
+    const tempDir = path.join(__dirname, '../../test-output/ref-resolution-local');
+
+    beforeEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+      fs.mkdirSync(path.join(tempDir, 'api', 'schemas'), { recursive: true });
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+    });
+
+    it('should resolve nested relative refs between sibling schema files', async () => {
+      // openapi.yaml references ./schemas/service.yaml#/...
+      fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
+openapi: 3.0.0
+info:
+  title: Deployment API
+  version: 1.0.0
+components:
+  schemas:
+    Service:
+      $ref: './schemas/service.yaml#/components/schemas/Service'
+    WorkloadRepo:
+      $ref: './schemas/vcs.yaml#/components/schemas/WorkloadRepo'
+`);
+
+      // service.yaml references sibling ./vcs.yaml#/...
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'service.yaml'), `
+components:
+  schemas:
+    Service:
+      type: object
+      properties:
+        name:
+          type: string
+        repo:
+          $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
+      required:
+        - name
+`);
+
+      // vcs.yaml defines WorkloadRepo
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'vcs.yaml'), `
+components:
+  schemas:
+    WorkloadRepo:
+      type: object
+      properties:
+        url:
+          type: string
+        branch:
+          type: string
+        provider:
+          type: string
+          enum:
+            - github
+            - gitlab
+            - bitbucket
+      required:
+        - url
+`);
+
+      const specPath = path.join(tempDir, 'api', 'openapi.yaml');
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: specPath,
+        resolveRefs: true,
+      });
+
+      // Service should be fully resolved with nested WorkloadRepo
+      const service = spec.components.schemas.Service;
+      expect(service.type).toBe('object');
+      expect(service.properties.name.type).toBe('string');
+
+      // The nested ref from service.yaml → vcs.yaml should be inlined
+      const repo = service.properties.repo;
+      expect(repo.type).toBe('object');
+      expect(repo.properties.url.type).toBe('string');
+      expect(repo.properties.branch.type).toBe('string');
+      expect(repo.properties.provider.type).toBe('string');
+      expect(repo.properties.provider.enum).toEqual(['github', 'gitlab', 'bitbucket']);
+
+      // Direct ref to WorkloadRepo should also work
+      const workloadRepo = spec.components.schemas.WorkloadRepo;
+      expect(workloadRepo.type).toBe('object');
+      expect(workloadRepo.properties.url.type).toBe('string');
+    });
+
+    it('should generate models from local spec with nested refs and fragments', async () => {
+      // Same file structure as above
+      fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
+openapi: 3.0.0
+info:
+  title: Deployment API
+  version: 1.0.0
+paths:
+  /services:
+    get:
+      operationId: listServices
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+components:
+  schemas:
+    Service:
+      $ref: './schemas/service.yaml#/components/schemas/Service'
+`);
+
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'service.yaml'), `
+components:
+  schemas:
+    Service:
+      type: object
+      properties:
+        name:
+          type: string
+        repo:
+          $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
+      required:
+        - name
+`);
+
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'vcs.yaml'), `
+components:
+  schemas:
+    WorkloadRepo:
+      type: object
+      properties:
+        url:
+          type: string
+        branch:
+          type: string
+      required:
+        - url
+`);
+
+      const specPath = path.join(tempDir, 'api', 'openapi.yaml');
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: specPath,
+        resolveRefs: true,
+      });
+
+      // Parse and generate
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec);
+      const outputDir = path.join(tempDir, 'generated');
+      const generator = new Generator({ outputDir });
+      await generator.generate(ir);
+
+      // Verify Service model was generated
+      const serviceFile = path.join(outputDir, 'models', 'service.ts');
+      expect(fs.existsSync(serviceFile)).toBe(true);
+      const serviceCode = fs.readFileSync(serviceFile, 'utf-8');
+      expect(serviceCode).toContain('export class Service');
+      expect(serviceCode).toContain('name');
+      expect(serviceCode).toContain('repo');
+    });
+  });
+
   describe('error handling', () => {
     it('should handle 404 for missing ref', async () => {
       const baseUrl = 'https://api.example.com';
