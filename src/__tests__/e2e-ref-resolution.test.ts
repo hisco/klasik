@@ -528,6 +528,221 @@ properties:
     });
   });
 
+  describe('deduplication with different relative paths', () => {
+    it('should resolve same file referenced from different relative paths', async () => {
+      const baseUrl = 'https://api.example.com';
+
+      mockedAxios.get.mockImplementation((url: string) => {
+        if (url === `${baseUrl}/spec.yaml`) {
+          return Promise.resolve({
+            data: `
+openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Pet:
+      $ref: '${baseUrl}/schemas/Pet.yaml'
+    Owner:
+      $ref: '${baseUrl}/schemas/Owner.yaml'
+`,
+          });
+        }
+        if (url === `${baseUrl}/schemas/Pet.yaml`) {
+          return Promise.resolve({
+            data: `
+type: object
+properties:
+  name:
+    type: string
+  owner:
+    $ref: './Owner.yaml'
+`,
+          });
+        }
+        if (url === `${baseUrl}/schemas/Owner.yaml`) {
+          return Promise.resolve({
+            data: `
+type: object
+properties:
+  name:
+    type: string
+  email:
+    type: string
+`,
+          });
+        }
+        return Promise.reject(new Error(`Not found: ${url}`));
+      });
+
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: `${baseUrl}/spec.yaml`,
+        resolveRefs: true,
+      });
+
+      // Both refs should be inlined even though they resolve to the same URL
+      expect(spec.components.schemas.Pet).toEqual({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          owner: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              email: { type: 'string' },
+            },
+          },
+        },
+      });
+
+      expect(spec.components.schemas.Owner).toEqual({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          email: { type: 'string' },
+        },
+      });
+    });
+
+    it('should generate all models when same file is referenced via different paths', async () => {
+      const baseUrl = 'https://api.example.com';
+
+      mockedAxios.get.mockImplementation((url: string) => {
+        if (url === `${baseUrl}/spec.yaml`) {
+          return Promise.resolve({
+            data: `
+openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+components:
+  schemas:
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        customer:
+          $ref: '${baseUrl}/schemas/Customer.yaml'
+    Customer:
+      $ref: '${baseUrl}/schemas/Customer.yaml'
+`,
+          });
+        }
+        if (url === `${baseUrl}/schemas/Customer.yaml`) {
+          return Promise.resolve({
+            data: `
+type: object
+properties:
+  name:
+    type: string
+  email:
+    type: string
+required:
+  - name
+`,
+          });
+        }
+        return Promise.reject(new Error(`Not found: ${url}`));
+      });
+
+      // Load and resolve
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: `${baseUrl}/spec.yaml`,
+        resolveRefs: true,
+      });
+
+      // Parse and generate
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec);
+      const outputDir = path.join(TEST_OUTPUT_DIR, 'dedup-refs');
+      const generator = new Generator({ outputDir });
+      await generator.generate(ir);
+
+      // Verify both Order and Customer models exist
+      const orderFile = path.join(outputDir, 'models', 'order.ts');
+      expect(fs.existsSync(orderFile)).toBe(true);
+      const orderCode = fs.readFileSync(orderFile, 'utf-8');
+      expect(orderCode).toContain('export class Order');
+      expect(orderCode).toContain('customer');
+    });
+  });
+
+  describe('auth headers with nested refs', () => {
+    it('should pass auth headers to all nested ref requests', async () => {
+      const baseUrl = 'https://api.example.com';
+      const authToken = 'Bearer secret-token-123';
+      const requestUrls: string[] = [];
+
+      mockedAxios.get.mockImplementation((url: string, config: any) => {
+        requestUrls.push(url);
+        // Verify auth header is present on EVERY request
+        expect(config?.headers?.Authorization).toBe(authToken);
+
+        if (url === `${baseUrl}/spec.yaml`) {
+          return Promise.resolve({
+            data: `
+openapi: 3.0.0
+info:
+  title: Auth Test API
+  version: 1.0.0
+components:
+  schemas:
+    Pet:
+      $ref: '${baseUrl}/schemas/Pet.yaml'
+`,
+          });
+        }
+        if (url === `${baseUrl}/schemas/Pet.yaml`) {
+          return Promise.resolve({
+            data: `
+type: object
+properties:
+  name:
+    type: string
+  owner:
+    $ref: '${baseUrl}/schemas/Owner.yaml'
+`,
+          });
+        }
+        if (url === `${baseUrl}/schemas/Owner.yaml`) {
+          return Promise.resolve({
+            data: `
+type: object
+properties:
+  name:
+    type: string
+`,
+          });
+        }
+        return Promise.reject(new Error(`Not found: ${url}`));
+      });
+
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: `${baseUrl}/spec.yaml`,
+        resolveRefs: true,
+        headers: { Authorization: authToken },
+      });
+
+      // All 3 URLs should have been fetched with auth
+      expect(requestUrls).toContain(`${baseUrl}/spec.yaml`);
+      expect(requestUrls).toContain(`${baseUrl}/schemas/Pet.yaml`);
+      expect(requestUrls).toContain(`${baseUrl}/schemas/Owner.yaml`);
+
+      // Verify full resolution worked
+      expect(spec.components.schemas.Pet.properties.owner).toEqual({
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+        },
+      });
+    });
+  });
+
   describe('error handling', () => {
     it('should handle 404 for missing ref', async () => {
       const baseUrl = 'https://api.example.com';
