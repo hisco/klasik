@@ -521,49 +521,67 @@ describe('ApiClientGenerator', () => {
   });
 
   describe('union response types', () => {
-    it('should not use plainToInstance for union (oneOf) response types', async () => {
-      const operation: OperationDefinition = {
-        operationId: 'getConfig',
-        method: 'GET',
-        path: '/configs/{id}',
-        parameters: [
+    const unionOperation: OperationDefinition = {
+      operationId: 'getConfig',
+      method: 'GET',
+      path: '/configs/{id}',
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          type: { kind: 'primitive', name: 'string' },
+        },
+      ],
+      responses: new Map([
+        [
+          '200',
           {
-            name: 'id',
-            in: 'path',
-            required: true,
-            type: { kind: 'primitive', name: 'string' },
+            statusCode: '200',
+            description: 'Success',
+            content: new Map([
+              ['application/json', {
+                kind: 'union' as const,
+                unionTypes: [
+                  { kind: 'reference' as const, name: 'ListResponse' },
+                  { kind: 'reference' as const, name: 'SingleResponse' },
+                ],
+              }],
+            ]),
           },
         ],
-        responses: new Map([
-          [
-            '200',
-            {
-              statusCode: '200',
-              description: 'Success',
-              content: new Map([
-                ['application/json', {
-                  kind: 'union' as const,
-                  unionTypes: [
-                    { kind: 'reference' as const, name: 'ListResponse' },
-                    { kind: 'reference' as const, name: 'SingleResponse' },
-                  ],
-                }],
-              ]),
-            },
-          ],
-        ]),
-        tags: ['configs'],
-      };
+      ]),
+      tags: ['configs'],
+    };
 
+    it('should fail by default when union response type is encountered', async () => {
       const ir: SchemaIR = {
         schemas: new Map(),
-        operations: new Map([['getConfig', operation]]),
+        operations: new Map([['getConfig', unionOperation]]),
         metadata: { sourceFormat: 'openapi' },
       };
 
       const generator = new ApiClientGenerator({
         outputDir: tempDir,
         esm: false,
+      });
+
+      await expect(generator.generateFullClient(ir)).rejects.toThrow(
+        /union response type.*ListResponse \| SingleResponse.*--allow-union-responses/
+      );
+    });
+
+    it('should skip transformation for union responses when allowUnionResponses is set', async () => {
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getConfig', unionOperation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+        allowUnionResponses: true,
       });
 
       await generator.generateFullClient(ir);
@@ -573,8 +591,7 @@ describe('ApiClientGenerator', () => {
         'utf-8'
       );
 
-      // Should NOT call plainToInstance with union type — only import may remain
-      // The method body should use direct return (no transformation)
+      // Should use direct return (no transformation)
       expect(apiContent).toContain('return this.axios.request(localVarRequestOptions);');
       expect(apiContent).not.toContain('plainToInstance(ListResponse | SingleResponse');
     });

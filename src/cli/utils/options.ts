@@ -93,6 +93,13 @@ export function useZodOption(): Option {
 }
 
 /**
+ * Allow union responses option builder
+ */
+export function allowUnionResponsesOption(): Option {
+  return new Option('--allow-union-responses', 'Skip response transformation for union (oneOf/anyOf) response types instead of failing').default(false);
+}
+
+/**
  * Template directory option builder
  */
 export function templateOption(): Option {

@@ -580,10 +580,30 @@ export class ApiClientGenerator {
     const isArray = typeRef.kind === 'array';
     const baseTypeRef = isArray ? typeRef.elementType! : typeRef;
 
-    // Check if primitive or union (kind is 'primitive' for string, number, boolean, etc.)
-    // Union types (oneOf/anyOf) cannot be used with plainToInstance — treat as primitive to skip transformation
+    // Union types (oneOf/anyOf) cannot be used with plainToInstance — the generated code
+    // would be `plainToInstance(TypeA | TypeB, data)` which is invalid at runtime.
+    if (baseTypeRef.kind === 'union') {
+      if (!this.options.allowUnionResponses) {
+        const unionTypes = baseTypeRef.unionTypes
+          ? baseTypeRef.unionTypes.map(t => t.name || t.kind).join(' | ')
+          : 'unknown';
+        throw new Error(
+          `Operation "${operation.operationId}" has a union response type (${unionTypes}) which cannot be used with plainToInstance. ` +
+          `Use --allow-union-responses to skip response transformation for union types, or refactor the spec to use a single response type.`
+        );
+      }
+      // User opted in — skip transformation for this response
+      return {
+        hasResponse: true,
+        isArray,
+        isPrimitive: true,
+        baseType: this.tsDocGenerator.typeReferenceToString(baseTypeRef),
+        fullType: this.tsDocGenerator.typeReferenceToString(typeRef),
+      };
+    }
+
+    // Check if primitive (kind is 'primitive' for string, number, boolean, etc.)
     const isPrimitive = baseTypeRef.kind === 'primitive' ||
-                       baseTypeRef.kind === 'union' ||
                        (baseTypeRef.kind === 'reference' && !baseTypeRef.name) ||
                        (baseTypeRef.name === 'string' || baseTypeRef.name === 'number' ||
                         baseTypeRef.name === 'boolean' || baseTypeRef.name === 'any');

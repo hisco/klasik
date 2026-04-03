@@ -50,6 +50,7 @@ export interface GeneratorOptions {
   httpClient?: 'axios' | 'fetch';
   parameterStyle?: 'positional' | 'object-flat';
   nestJsGraphql?: boolean;
+  allowUnionResponses?: boolean;
 }
 
 /**

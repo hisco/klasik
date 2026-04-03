@@ -22,6 +22,7 @@ import {
   classValidatorOption,
   useAjvOption,
   useZodOption,
+  allowUnionResponsesOption,
   templateOption,
   keepSpecOption,
   resolveRefsOption,
@@ -60,6 +61,7 @@ export interface GenerateOptions {
   httpClient?: 'axios' | 'fetch';
   clean?: boolean;
   renameModel?: string[];
+  allowUnionResponses?: boolean;
   parameterStyle?: 'positional' | 'object-flat';
 }
 
@@ -158,6 +160,7 @@ export async function generateAction(options: GenerateOptions): Promise<void> {
       templateDir: options.template,
       httpClient: options.httpClient,
       parameterStyle: options.parameterStyle,
+      allowUnionResponses: options.allowUnionResponses,
     });
 
     await generator.generate(ir);
@@ -200,5 +203,6 @@ export const generateCommand = new Command('generate')
   .addOption(httpClientOption())
   .addOption(parameterStyleOption())
   .addOption(cleanOption())
+  .addOption(allowUnionResponsesOption())
   .addOption(renameModelOption())
   .action(generateAction);
