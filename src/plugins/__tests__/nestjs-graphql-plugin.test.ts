@@ -571,6 +571,72 @@ describe('NestJSGraphQLPlugin', () => {
     });
   });
 
+  describe('auto-rename conflicting schemas', () => {
+    it('should rename schemas matching GraphQL built-in scalars', () => {
+      const ir = ImportedIRHelpers.createSchemaIR();
+
+      // Add schemas that conflict with GraphQL built-ins
+      const boolSchema = ImportedIRHelpers.createSchema('Boolean');
+      boolSchema.properties.set('value', ImportedIRHelpers.createProperty('value', ImportedIRHelpers.createPrimitiveType('boolean')));
+      ir.schemas.set('Boolean', boolSchema);
+
+      const stringSchema = ImportedIRHelpers.createSchema('String');
+      ir.schemas.set('String', stringSchema);
+
+      // Add a non-conflicting schema that references Boolean
+      const entitySchema = ImportedIRHelpers.createSchema('Entity');
+      entitySchema.properties.set('flag', ImportedIRHelpers.createProperty('flag', ImportedIRHelpers.createReferenceType('Boolean')));
+      ir.schemas.set('Entity', entitySchema);
+
+      plugin.beforeGeneration(context, ir);
+
+      // Conflicting schemas should be renamed
+      expect(ir.schemas.has('BooleanModel')).toBe(true);
+      expect(ir.schemas.has('StringModel')).toBe(true);
+      expect(ir.schemas.has('Boolean')).toBe(false);
+      expect(ir.schemas.has('String')).toBe(false);
+
+      // Non-conflicting schema should remain
+      expect(ir.schemas.has('Entity')).toBe(true);
+
+      // References should be updated
+      const entityFlag = ir.schemas.get('Entity')!.properties.get('flag')!;
+      expect(entityFlag.type.name).toBe('BooleanModel');
+    });
+
+    it('should not rename schemas that merely contain built-in names', () => {
+      const ir = ImportedIRHelpers.createSchemaIR();
+
+      const schema1 = ImportedIRHelpers.createSchema('NullableBoolean');
+      ir.schemas.set('NullableBoolean', schema1);
+
+      const schema2 = ImportedIRHelpers.createSchema('StringMap');
+      ir.schemas.set('StringMap', schema2);
+
+      const schema3 = ImportedIRHelpers.createSchema('FloatingPoint');
+      ir.schemas.set('FloatingPoint', schema3);
+
+      plugin.beforeGeneration(context, ir);
+
+      // None should be renamed — only exact matches are affected
+      expect(ir.schemas.has('NullableBoolean')).toBe(true);
+      expect(ir.schemas.has('StringMap')).toBe(true);
+      expect(ir.schemas.has('FloatingPoint')).toBe(true);
+    });
+
+    it('should not rename when no conflicts exist', () => {
+      const ir = ImportedIRHelpers.createSchemaIR();
+
+      const schema = ImportedIRHelpers.createSchema('User');
+      ir.schemas.set('User', schema);
+
+      plugin.beforeGeneration(context, ir);
+
+      expect(ir.schemas.has('User')).toBe(true);
+      expect(ir.schemas.size).toBe(1);
+    });
+  });
+
   describe('modifyPackageJson', () => {
     it('should add @nestjs/graphql to existing dependencies', () => {
       const packageJson: any = {

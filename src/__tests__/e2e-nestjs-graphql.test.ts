@@ -581,4 +581,88 @@ console.log(JSON.stringify(result, null, 2));
     const objectTypeNames = result.objectTypes.map((ot: any) => ot.target);
     expect(objectTypeNames).toContain('ServiceConfig');
   }, 180000);
+
+  it('should auto-rename schemas that conflict with GraphQL built-in scalars', async () => {
+    const TEST_SCALAR_DIR = path.join(__dirname, '../../test-output/e2e-nestjs-graphql-scalars');
+    const SCALAR_MODELS_DIR = path.join(TEST_SCALAR_DIR, 'models');
+    await ensureCleanDirectory(TEST_SCALAR_DIR);
+
+    // Spec with schemas named after GraphQL built-in scalars (realistic wrapper types)
+    const scalarConflictSpec = {
+      openapi: '3.0.0',
+      info: { title: 'Scalar Conflict Test', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          Boolean: {
+            type: 'object',
+            description: 'Three-state boolean wrapper',
+            properties: {
+              value: { type: 'boolean' },
+              isSet: { type: 'boolean' },
+            },
+          },
+          Integer: {
+            type: 'object',
+            description: 'Nullable integer wrapper',
+            properties: {
+              value: { type: 'integer', format: 'int32' },
+            },
+          },
+          NullableBoolean: {
+            type: 'object',
+            description: 'Should NOT be renamed — only exact matches',
+            properties: {
+              value: { type: 'boolean', nullable: true },
+            },
+          },
+          Config: {
+            type: 'object',
+            required: ['enabled'],
+            properties: {
+              enabled: { $ref: '#/components/schemas/Boolean' },
+              count: { $ref: '#/components/schemas/Integer' },
+              flag: { $ref: '#/components/schemas/NullableBoolean' },
+            },
+          },
+        },
+      },
+    };
+
+    const parser = new OpenAPIParser();
+    const ir = parser.parse(scalarConflictSpec, { includeOperations: false });
+
+    const generator = new Generator({
+      outputDir: TEST_SCALAR_DIR,
+      nestJsGraphql: true,
+      esm: false,
+      mode: 'models-only',
+    });
+    await generator.generate(ir);
+
+    // Boolean should be renamed to BooleanModel
+    expect(fs.existsSync(path.join(SCALAR_MODELS_DIR, 'boolean-model.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(SCALAR_MODELS_DIR, 'boolean.ts'))).toBe(false);
+
+    const boolModelContent = fs.readFileSync(path.join(SCALAR_MODELS_DIR, 'boolean-model.ts'), 'utf-8');
+    expect(boolModelContent).toContain('export class BooleanModel');
+    expect(boolModelContent).toContain('@ObjectType');
+
+    // NullableBoolean should NOT be renamed
+    expect(fs.existsSync(path.join(SCALAR_MODELS_DIR, 'nullable-boolean.ts'))).toBe(true);
+    const nullableBoolContent = fs.readFileSync(path.join(SCALAR_MODELS_DIR, 'nullable-boolean.ts'), 'utf-8');
+    expect(nullableBoolContent).toContain('export class NullableBoolean');
+
+    // Config should reference BooleanModel, not Boolean
+    const configContent = fs.readFileSync(path.join(SCALAR_MODELS_DIR, 'config.ts'), 'utf-8');
+    expect(configContent).toContain("import { BooleanModel } from");
+    expect(configContent).toContain("'enabled': BooleanModel");
+    // NullableBoolean reference should be unchanged
+    expect(configContent).toContain("import { NullableBoolean } from");
+
+    // Integer is not a GraphQL built-in scalar (Int is), so should NOT be renamed
+    expect(fs.existsSync(path.join(SCALAR_MODELS_DIR, 'integer.ts'))).toBe(true);
+    const integerContent = fs.readFileSync(path.join(SCALAR_MODELS_DIR, 'integer.ts'), 'utf-8');
+    expect(integerContent).toContain('export class Integer');
+  });
 });

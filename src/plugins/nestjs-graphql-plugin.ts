@@ -14,17 +14,25 @@ import {
   SchemaIR,
 } from '../ir/types';
 import { GenerationContext } from '../builders/class-builder';
+import { IRRenamer } from '../utils/ir-renamer';
+
+/** GraphQL built-in scalar type names that cannot be used as ObjectType names */
+const GRAPHQL_BUILT_IN_SCALARS = new Set(['Boolean', 'Int', 'Float', 'String', 'ID']);
 
 export class NestJSGraphQLPlugin implements GeneratorPlugin {
   name = 'nestjs-graphql';
   priority = 100;
 
   /**
-   * Add @nestjs/graphql imports before generation
+   * Add @nestjs/graphql imports and auto-rename schemas that conflict with
+   * GraphQL built-in scalar types (Boolean, Int, Float, String, ID).
    */
   beforeGeneration(context: GenerationContext, ir: SchemaIR): void {
     context.importManager.addImport('@nestjs/graphql', 'ObjectType');
     context.importManager.addImport('@nestjs/graphql', 'Field');
+
+    // Auto-rename schemas that collide with GraphQL built-in scalars
+    this.autoRenameConflictingSchemas(ir);
   }
 
   /**
@@ -237,5 +245,88 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
       .replace(/\\/g, '\\\\')
       .replace(/`/g, '\\`')
       .replace(/\$/g, '\\$');
+  }
+
+  /**
+   * Auto-rename schemas whose names exactly match GraphQL built-in scalar types.
+   * Appends "Model" suffix (e.g., Boolean → BooleanModel).
+   * Mutates the IR in-place so all downstream generation uses the safe names.
+   *
+   * Uses exact matching — schemas like "NullableBoolean" or "StringMap" are NOT renamed.
+   */
+  private autoRenameConflictingSchemas(ir: SchemaIR): void {
+    // Find exact matches only
+    const renames = new Map<string, string>();
+    for (const name of ir.schemas.keys()) {
+      if (GRAPHQL_BUILT_IN_SCALARS.has(name)) {
+        renames.set(name, `${name}Model`);
+      }
+    }
+
+    if (renames.size === 0) return;
+
+    // Rebuild schemas map with renamed keys and updated schema names
+    const entries = Array.from(ir.schemas.entries());
+    ir.schemas.clear();
+    for (const [originalName, schema] of entries) {
+      const newName = renames.get(originalName);
+      if (newName) {
+        schema.name = newName;
+      }
+      ir.schemas.set(newName || originalName, schema);
+    }
+
+    // Update all type references across schemas
+    for (const schema of ir.schemas.values()) {
+      for (const prop of schema.properties.values()) {
+        this.updateTypeRefs(prop.type, renames);
+      }
+    }
+
+    // Update all type references across operations
+    for (const op of ir.operations.values()) {
+      for (const param of op.parameters) {
+        this.updateTypeRefs(param.type, renames);
+      }
+      if (op.requestBody?.content) {
+        for (const type of op.requestBody.content.values()) {
+          this.updateTypeRefs(type, renames);
+        }
+      }
+      for (const response of op.responses.values()) {
+        if (response.content) {
+          for (const type of response.content.values()) {
+            this.updateTypeRefs(type, renames);
+          }
+        }
+      }
+    }
+
+    const renamed = Array.from(renames.entries())
+      .map(([from, to]) => `${from} → ${to}`)
+      .join(', ');
+    console.log(`NestJS GraphQL: auto-renamed ${renames.size} schema(s) conflicting with built-in scalars: ${renamed}`);
+  }
+
+  /**
+   * Recursively update type reference names based on rename map
+   */
+  private updateTypeRefs(type: TypeReference, renames: Map<string, string>): void {
+    if (!type) return;
+
+    if ((type.kind === 'reference' || type.kind === 'object') && type.name && renames.has(type.name)) {
+      type.name = renames.get(type.name)!;
+    }
+    if (type.elementType) {
+      this.updateTypeRefs(type.elementType, renames);
+    }
+    if (type.unionTypes) {
+      for (const t of type.unionTypes) {
+        this.updateTypeRefs(t, renames);
+      }
+    }
+    if (type.additionalProperties) {
+      this.updateTypeRefs(type.additionalProperties, renames);
+    }
   }
 }
