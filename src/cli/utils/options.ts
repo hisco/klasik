@@ -30,7 +30,9 @@ export function outputOption(description: string, required = true): Option {
  * Header option builder (repeatable)
  */
 export function headerOption(): Option {
-  return new Option('--header <header>', 'Custom header in format "Key: Value" (repeatable)');
+  return new Option('--header <header>', 'Custom header in format "Key: Value" (repeatable)')
+    .argParser(collectValues)
+    .default([]);
 }
 
 /**
