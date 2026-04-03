@@ -184,6 +184,7 @@ describe('E2E: NestJS GraphQL Plugin', () => {
 
     // Verify imports
     expect(userContent).toContain('from "@nestjs/graphql"');
+    expect(userContent).toContain('from "graphql-scalars"');
     expect(addressContent).toContain('from "@nestjs/graphql"');
 
     // Verify @ObjectType class decorator
@@ -244,6 +245,7 @@ describe('E2E: NestJS GraphQL Plugin', () => {
     packageJson.dependencies['@nestjs/common'] = '^10.0.0';
     packageJson.dependencies['@nestjs/core'] = '^10.0.0';
     packageJson.dependencies['graphql'] = '^16.0.0';
+    packageJson.dependencies['graphql-scalars'] = '^1.22.0';
     packageJson.dependencies['reflect-metadata'] = '^0.2.0';
     packageJson.dependencies['rxjs'] = '^7.0.0';
     packageJson.dependencies['@apollo/server'] = '^4.0.0';
@@ -371,8 +373,8 @@ console.log(JSON.stringify(result, null, 2));
     expect(userFieldNames).toContain('friends');
     expect(userFieldNames).toContain('legacyField');
 
-    // metadata (dictionary type) should NOT have @Field
-    expect(userFieldNames).not.toContain('metadata');
+    // metadata (dictionary type) should have @Field(() => GraphQLJSON)
+    expect(userFieldNames).toContain('metadata');
 
     // Verify field types
     const idField = userFields.find((f: any) => f.name === 'id');
@@ -494,6 +496,7 @@ console.log(JSON.stringify(result, null, 2));
     packageJson.dependencies['@nestjs/common'] = '^10.0.0';
     packageJson.dependencies['@nestjs/core'] = '^10.0.0';
     packageJson.dependencies['graphql'] = '^16.0.0';
+    packageJson.dependencies['graphql-scalars'] = '^1.22.0';
     packageJson.dependencies['reflect-metadata'] = '^0.2.0';
     packageJson.dependencies['rxjs'] = '^7.0.0';
     packageJson.dependencies['@apollo/server'] = '^4.0.0';
