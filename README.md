@@ -1796,8 +1796,9 @@ The `--nestjs-graphql` flag maps OpenAPI types to GraphQL scalars:
 | `boolean` | `Boolean` |
 | `array` | `[ElementType]` |
 | `$ref` | Referenced class name |
+| `object` (no properties) / `additionalProperties` / `any` | `GraphQLJSON` (from `graphql-scalars`) |
 
-Dictionary types (`additionalProperties`) and unions are skipped as they have no direct GraphQL representation. Deprecated fields automatically get `deprecationReason: "Deprecated"`.
+Union types are skipped as they have no direct GraphQL representation. Deprecated fields automatically get `deprecationReason: "Deprecated"`.
 
 ## Advanced Topics
 

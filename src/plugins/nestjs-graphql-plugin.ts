@@ -89,6 +89,7 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
     }
 
     packageJson.dependencies['@nestjs/graphql'] = '^12.0.0';
+    packageJson.dependencies['graphql-scalars'] = '^1.23.0';
   }
 
   /**
@@ -112,11 +113,15 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
 
       case 'reference':
       case 'object':
-        return type.name || 'String';
+        return type.name || 'GraphQLJSON';
 
       case 'dictionary':
-      case 'union':
+        return 'GraphQLJSON';
+
       case 'unknown':
+        return 'GraphQLJSON';
+
+      case 'union':
       default:
         return null;
     }
@@ -158,6 +163,9 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
     }
     if (/\bID\b/.test(fieldType)) {
       context.importManager.addImport('@nestjs/graphql', 'ID');
+    }
+    if (/\bGraphQLJSON\b/.test(fieldType)) {
+      context.importManager.addImport('graphql-scalars', 'GraphQLJSON');
     }
   }
 

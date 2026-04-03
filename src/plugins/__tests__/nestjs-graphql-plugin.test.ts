@@ -286,8 +286,8 @@ describe('NestJSGraphQLPlugin', () => {
     });
   });
 
-  describe('decorateProperty - skipped types', () => {
-    it('should skip dictionary type', () => {
+  describe('decorateProperty - GraphQLJSON types', () => {
+    it('should add @Field(() => GraphQLJSON) for dictionary type', () => {
       const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
       const classDecl = sourceFile.getClass('User')!;
       const propertyDecl = classDecl.addProperty({ name: 'labels', type: '{ [key: string]: string }' });
@@ -301,9 +301,71 @@ describe('NestJSGraphQLPlugin', () => {
 
       plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
 
-      expect(propertyDecl.getDecorator('Field')).toBeUndefined();
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      const text = decorator!.getText();
+      expect(text).toContain('() => GraphQLJSON');
     });
 
+    it('should add @Field(() => GraphQLJSON) for unknown type', () => {
+      const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
+      const classDecl = sourceFile.getClass('User')!;
+      const propertyDecl = classDecl.addProperty({ name: 'data', type: 'any' });
+
+      const schema = ImportedIRHelpers.createSchema('User');
+      const propertyDef = createPropertyWithOptions(
+        'data',
+        ImportedIRHelpers.createTypeReference('unknown', 'any'),
+        { required: false }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      const text = decorator!.getText();
+      expect(text).toContain('() => GraphQLJSON');
+    });
+
+    it('should add @Field(() => GraphQLJSON) for object type without name', () => {
+      const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
+      const classDecl = sourceFile.getClass('User')!;
+      const propertyDecl = classDecl.addProperty({ name: 'spec', type: 'unknown' });
+
+      const schema = ImportedIRHelpers.createSchema('User');
+      const propertyDef = createPropertyWithOptions(
+        'spec',
+        ImportedIRHelpers.createTypeReference('object'),
+        { required: false }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      const text = decorator!.getText();
+      expect(text).toContain('() => GraphQLJSON');
+    });
+
+    it('should add graphql-scalars import for GraphQLJSON fields', () => {
+      const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
+      const classDecl = sourceFile.getClass('User')!;
+      const propertyDecl = classDecl.addProperty({ name: 'metadata', type: 'any' });
+
+      const schema = ImportedIRHelpers.createSchema('User');
+      const propertyDef = createPropertyWithOptions(
+        'metadata',
+        ImportedIRHelpers.createTypeReference('dictionary', 'string'),
+        { required: false }
+      );
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      expect(importManager.hasImport('graphql-scalars')).toBe(true);
+    });
+  });
+
+  describe('decorateProperty - skipped types', () => {
     it('should skip union type', () => {
       const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
       const classDecl = sourceFile.getClass('User')!;
@@ -314,23 +376,6 @@ describe('NestJSGraphQLPlugin', () => {
         'value',
         ImportedIRHelpers.createTypeReference('union', 'string | number'),
         { required: true }
-      );
-
-      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
-
-      expect(propertyDecl.getDecorator('Field')).toBeUndefined();
-    });
-
-    it('should skip unknown type', () => {
-      const sourceFile = project.createSourceFile('test.ts', 'export class User {}');
-      const classDecl = sourceFile.getClass('User')!;
-      const propertyDecl = classDecl.addProperty({ name: 'data', type: 'any' });
-
-      const schema = ImportedIRHelpers.createSchema('User');
-      const propertyDef = createPropertyWithOptions(
-        'data',
-        ImportedIRHelpers.createTypeReference('unknown', 'any'),
-        { required: false }
       );
 
       plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
@@ -535,6 +580,7 @@ describe('NestJSGraphQLPlugin', () => {
       plugin.modifyPackageJson(packageJson, context);
 
       expect(packageJson.dependencies['@nestjs/graphql']).toBe('^12.0.0');
+      expect(packageJson.dependencies['graphql-scalars']).toBe('^1.23.0');
       expect(packageJson.dependencies['class-transformer']).toBe('^0.5.1');
     });
 
@@ -547,6 +593,7 @@ describe('NestJSGraphQLPlugin', () => {
       plugin.modifyPackageJson(packageJson, context);
 
       expect((packageJson as any).dependencies['@nestjs/graphql']).toBe('^12.0.0');
+      expect((packageJson as any).dependencies['graphql-scalars']).toBe('^1.23.0');
     });
   });
 });

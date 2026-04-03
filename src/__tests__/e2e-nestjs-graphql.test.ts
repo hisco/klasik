@@ -145,6 +145,7 @@ describe('E2E: NestJS GraphQL Plugin', () => {
 
     // Verify imports
     expect(userContent).toContain('from "@nestjs/graphql"');
+    expect(userContent).toContain('from "graphql-scalars"');
     expect(addressContent).toContain('from "@nestjs/graphql"');
 
     // Verify @ObjectType class decorator
@@ -179,6 +180,9 @@ describe('E2E: NestJS GraphQL Plugin', () => {
     // Reference type
     expect(userContent).toContain('() => Address');
 
+    // GraphQLJSON for dictionary type (metadata)
+    expect(userContent).toContain('() => GraphQLJSON');
+
     // Nullable fields (not required)
     expect(userContent).toContain('nullable: true');
 
@@ -198,6 +202,7 @@ describe('E2E: NestJS GraphQL Plugin', () => {
       fs.readFileSync(path.join(TEST_OUTPUT_DIR, 'package.json'), 'utf-8')
     );
     expect(packageJson.dependencies['@nestjs/graphql']).toBe('^12.0.0');
+    expect(packageJson.dependencies['graphql-scalars']).toBe('^1.23.0');
     expect(packageJson.dependencies['class-transformer']).toBeDefined();
 
     // Step 5: Install dependencies and compile
@@ -332,8 +337,8 @@ console.log(JSON.stringify(result, null, 2));
     expect(userFieldNames).toContain('friends');
     expect(userFieldNames).toContain('legacyField');
 
-    // metadata (dictionary type) should NOT have @Field
-    expect(userFieldNames).not.toContain('metadata');
+    // metadata (dictionary type) should have @Field with GraphQLJSON
+    expect(userFieldNames).toContain('metadata');
 
     // Verify field types
     const idField = userFields.find((f: any) => f.name === 'id');
@@ -344,6 +349,10 @@ console.log(JSON.stringify(result, null, 2));
 
     const activeField = userFields.find((f: any) => f.name === 'active');
     expect(activeField.typeFn).toBe('Boolean');
+
+    const metadataField = userFields.find((f: any) => f.name === 'metadata');
+    // GraphQLJSON is a GraphQLScalarType with name 'JSON'
+    expect(metadataField.typeFn).toBe('JSON');
 
     // Verify nullable options
     const emailField = userFields.find((f: any) => f.name === 'email');
