@@ -11,6 +11,7 @@
  * - Deep clones to avoid mutations
  * - Recursively traverses spec object
  * - Promotes external schema refs to components/schemas
+ * - Promotes sibling schemas referenced via internal $ref within promoted schemas
  */
 
 import { RefResolver } from './ref-resolver';
@@ -148,30 +149,31 @@ export class RefInliner {
     // Check if this ref points to a named schema that should be promoted
     const schemaName = this.extractSchemaName(fragment);
 
-    // Try to get resolved content
-    // RefResolver stores content with the original ref as key
-    let content = this.resolvedRefs.get(ref);
+    // Try to get resolved content (full document)
+    let fullDocument = this.resolvedRefs.get(ref);
 
     // If not found with full ref, try finding by file part
     // This handles cases where multiple refs point to same file with different fragments
-    if (!content && filePart) {
-      // Look for any key that starts with the file part
+    if (!fullDocument && filePart) {
       for (const [key, value] of this.resolvedRefs.entries()) {
         const [keyFilePart] = key.split('#');
         if (keyFilePart === filePart) {
-          content = value;
+          fullDocument = value;
           break;
         }
       }
     }
 
     // If still not found, throw error
-    if (!content) {
+    if (!fullDocument) {
       throw new RefInlinerError(
         `Cannot inline ref "${ref}": not found in resolved refs`,
         ref
       );
     }
+
+    // Start with full document content
+    let content = fullDocument;
 
     // If there's a fragment, resolve it within the document
     if (fragment) {
@@ -194,15 +196,84 @@ export class RefInliner {
 
     // If this ref points to a named schema, promote it to components/schemas
     // and return an internal $ref instead of inline content
-    if (schemaName && !this.promotedSchemas.has(schemaName)) {
-      this.promotedSchemas.set(schemaName, content);
-      return { $ref: `#/components/schemas/${schemaName}` };
-    } else if (schemaName && this.promotedSchemas.has(schemaName)) {
-      // Already promoted — just return the internal ref
+    if (schemaName) {
+      if (!this.promotedSchemas.has(schemaName)) {
+        this.promotedSchemas.set(schemaName, content);
+
+        // Promote sibling schemas from the same document that are referenced
+        // via internal $ref (e.g., #/components/schemas/SiblingSchema)
+        this.promoteSiblingSchemas(content, fullDocument);
+      }
       return { $ref: `#/components/schemas/${schemaName}` };
     }
 
     return content;
+  }
+
+  /**
+   * Find internal schema $ref within promoted content and promote those
+   * sibling schemas from the same source document.
+   *
+   * When a schema from a sub-file is promoted, it may contain internal
+   * $ref like #/components/schemas/Sibling that point to other schemas
+   * in the same sub-file. Those siblings must also be promoted.
+   */
+  private promoteSiblingSchemas(content: any, fullDocument: any): void {
+    // Find all internal schema refs in the content
+    const internalRefs = this.findInternalSchemaRefs(content);
+
+    for (const siblingName of internalRefs) {
+      // Skip if already promoted
+      if (this.promotedSchemas.has(siblingName)) {
+        continue;
+      }
+
+      // Try to find the sibling in the source document's components/schemas or definitions
+      const siblingSchema =
+        fullDocument?.components?.schemas?.[siblingName] ??
+        fullDocument?.definitions?.[siblingName];
+
+      if (siblingSchema) {
+        // Clone and inline external refs within the sibling
+        let processed = this.deepClone(siblingSchema);
+        processed = this.inlineRefs(processed);
+
+        this.promotedSchemas.set(siblingName, processed);
+
+        // Recursively promote siblings of this sibling
+        this.promoteSiblingSchemas(processed, fullDocument);
+      }
+    }
+  }
+
+  /**
+   * Find all internal $ref pointing to schemas within an object
+   * Returns the schema names referenced via #/components/schemas/X or #/definitions/X
+   */
+  private findInternalSchemaRefs(obj: any): string[] {
+    const names: Set<string> = new Set();
+
+    const visit = (current: any): void => {
+      if (current === null || typeof current !== 'object') {
+        return;
+      }
+
+      if (typeof current.$ref === 'string' && current.$ref.startsWith('#')) {
+        const name = this.extractSchemaName(current.$ref.substring(1));
+        if (name) {
+          names.add(name);
+        }
+      }
+
+      if (Array.isArray(current)) {
+        current.forEach(visit);
+      } else {
+        Object.values(current).forEach(visit);
+      }
+    };
+
+    visit(obj);
+    return Array.from(names);
   }
 
   /**

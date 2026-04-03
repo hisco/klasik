@@ -1143,6 +1143,166 @@ components:
     });
   });
 
+  describe('sibling schema promotion from sub-files', () => {
+    /**
+     * Tests that when a promoted schema contains internal $ref to sibling
+     * schemas in the same sub-file, those siblings are also promoted.
+     */
+    const tempDir = path.join(__dirname, '../../test-output/ref-resolution-sibling');
+
+    beforeEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+      fs.mkdirSync(path.join(tempDir, 'api', 'schemas'), { recursive: true });
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+    });
+
+    it('should generate model files for sibling schemas referenced via internal $ref', async () => {
+      // Main spec references Entity from sub-file
+      fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
+openapi: 3.0.0
+info:
+  title: Platform API
+  version: 1.0.0
+paths:
+  /entities:
+    get:
+      operationId: listEntities
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Entity'
+components:
+  schemas:
+    DirectModel:
+      type: object
+      properties:
+        id:
+          type: string
+    Entity:
+      $ref: './schemas/entity.yaml#/components/schemas/Entity'
+`);
+
+      // entity.yaml defines Entity plus sibling schemas used via internal $ref
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'entity.yaml'), `
+components:
+  schemas:
+    Entity:
+      type: object
+      properties:
+        name:
+          type: string
+        runtime:
+          $ref: '#/components/schemas/EntityRuntime'
+        pending:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingChange'
+        settings:
+          $ref: './config.yaml#/components/schemas/EntityConfig'
+      required:
+        - name
+    EntityRuntime:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - running
+            - stopped
+            - degraded
+        replicas:
+          type: integer
+    PendingChange:
+      type: object
+      properties:
+        description:
+          type: string
+        author:
+          type: string
+`);
+
+      // config.yaml defines EntityConfig with its own sibling
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'config.yaml'), `
+components:
+  schemas:
+    EntityConfig:
+      type: object
+      properties:
+        region:
+          type: string
+        level:
+          $ref: '#/components/schemas/PriorityLevel'
+    PriorityLevel:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+        - critical
+`);
+
+      const specPath = path.join(tempDir, 'api', 'openapi.yaml');
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: specPath,
+        resolveRefs: true,
+      });
+
+      // Parse and generate
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec);
+      const outputDir = path.join(tempDir, 'generated');
+      const generator = new Generator({ outputDir });
+      await generator.generate(ir);
+
+      const modelsDir = path.join(outputDir, 'models');
+
+      // Directly defined schema should exist
+      expect(fs.existsSync(path.join(modelsDir, 'direct-model.ts'))).toBe(true);
+
+      // Promoted schema should exist
+      const entityFile = path.join(modelsDir, 'entity.ts');
+      expect(fs.existsSync(entityFile)).toBe(true);
+      const entityCode = fs.readFileSync(entityFile, 'utf-8');
+      expect(entityCode).toContain('export class Entity');
+      expect(entityCode).toContain('runtime');
+      expect(entityCode).toContain('pending');
+
+      // Sibling schemas from entity.yaml should also be promoted
+      const runtimeFile = path.join(modelsDir, 'entity-runtime.ts');
+      expect(fs.existsSync(runtimeFile)).toBe(true);
+      const runtimeCode = fs.readFileSync(runtimeFile, 'utf-8');
+      expect(runtimeCode).toContain('EntityRuntime');
+      expect(runtimeCode).toContain('status');
+
+      const pendingFile = path.join(modelsDir, 'pending-change.ts');
+      expect(fs.existsSync(pendingFile)).toBe(true);
+      const pendingCode = fs.readFileSync(pendingFile, 'utf-8');
+      expect(pendingCode).toContain('PendingChange');
+      expect(pendingCode).toContain('author');
+
+      // Nested promoted schema (from config.yaml) should exist
+      const configFile = path.join(modelsDir, 'entity-config.ts');
+      expect(fs.existsSync(configFile)).toBe(true);
+
+      // Sibling of nested promoted schema should also be promoted
+      const priorityFile = path.join(modelsDir, 'priority-level.ts');
+      expect(fs.existsSync(priorityFile)).toBe(true);
+    });
+  });
+
   describe('error handling', () => {
     it('should handle 404 for missing ref', async () => {
       const baseUrl = 'https://api.example.com';

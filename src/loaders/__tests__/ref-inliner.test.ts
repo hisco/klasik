@@ -569,6 +569,150 @@ describe('RefInliner', () => {
     });
   });
 
+  describe('sibling schema promotion', () => {
+    it('should promote sibling schemas referenced via internal $ref', () => {
+      const spec = {
+        data: { $ref: './entity.yaml#/components/schemas/Entity' },
+      };
+
+      // entity.yaml defines Entity which references Metadata via internal $ref
+      const resolvedRefs = new Map([
+        [
+          './entity.yaml',
+          {
+            components: {
+              schemas: {
+                Entity: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    meta: { $ref: '#/components/schemas/Metadata' },
+                    tags: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Tag' },
+                    },
+                  },
+                },
+                Metadata: {
+                  type: 'object',
+                  properties: {
+                    key: { type: 'string' },
+                    value: { type: 'string' },
+                  },
+                },
+                Tag: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      // Entity should be promoted
+      expect(result.data).toEqual({ $ref: '#/components/schemas/Entity' });
+      expect(result.components.schemas.Entity).toBeDefined();
+      expect(result.components.schemas.Entity.properties.name.type).toBe('string');
+
+      // Sibling schemas should also be promoted
+      expect(result.components.schemas.Metadata).toEqual({
+        type: 'object',
+        properties: {
+          key: { type: 'string' },
+          value: { type: 'string' },
+        },
+      });
+      expect(result.components.schemas.Tag).toEqual({
+        type: 'object',
+        properties: {
+          label: { type: 'string' },
+        },
+      });
+    });
+
+    it('should transitively promote sibling schemas', () => {
+      const spec = {
+        data: { $ref: './types.yaml#/components/schemas/Parent' },
+      };
+
+      // Parent refs Child (internal), Child refs GrandChild (internal)
+      const resolvedRefs = new Map([
+        [
+          './types.yaml',
+          {
+            components: {
+              schemas: {
+                Parent: {
+                  type: 'object',
+                  properties: {
+                    child: { $ref: '#/components/schemas/Child' },
+                  },
+                },
+                Child: {
+                  type: 'object',
+                  properties: {
+                    grandchild: { $ref: '#/components/schemas/GrandChild' },
+                  },
+                },
+                GrandChild: {
+                  type: 'object',
+                  properties: {
+                    value: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      expect(result.components.schemas.Parent).toBeDefined();
+      expect(result.components.schemas.Child).toBeDefined();
+      expect(result.components.schemas.GrandChild).toEqual({
+        type: 'object',
+        properties: { value: { type: 'string' } },
+      });
+    });
+
+    it('should not promote unreferenced sibling schemas', () => {
+      const spec = {
+        data: { $ref: './types.yaml#/components/schemas/Used' },
+      };
+
+      const resolvedRefs = new Map([
+        [
+          './types.yaml',
+          {
+            components: {
+              schemas: {
+                Used: {
+                  type: 'object',
+                  properties: { name: { type: 'string' } },
+                },
+                Unused: {
+                  type: 'object',
+                  properties: { other: { type: 'string' } },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      expect(result.components.schemas.Used).toBeDefined();
+      expect(result.components.schemas.Unused).toBeUndefined();
+    });
+  });
+
   describe('inline - refs in nested objects', () => {
     it('should inline refs in deeply nested objects', () => {
       const spec = {
