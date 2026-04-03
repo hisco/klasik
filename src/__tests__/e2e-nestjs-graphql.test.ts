@@ -19,6 +19,45 @@ import { ensureCleanDirectory } from './test-helpers/cleanup-utils';
 const TEST_OUTPUT_DIR = path.join(__dirname, '../../test-output/e2e-nestjs-graphql');
 const MODELS_DIR = path.join(TEST_OUTPUT_DIR, 'models');
 
+// OpenAPI spec with enum schemas for testing enum generation
+const enumTestSpec = {
+  openapi: '3.0.0',
+  info: { title: 'Enum Test API', version: '1.0.0' },
+  paths: {},
+  components: {
+    schemas: {
+      ListenerMode: {
+        type: 'string',
+        enum: ['http', 'grpc', 'tcp'],
+        description: 'Protocol mode for the listener',
+      },
+      DeploymentStatus: {
+        type: 'string',
+        enum: ['in-progress', 'completed', 'failed', 'not-started'],
+      },
+      Priority: {
+        type: 'integer',
+        enum: [0, 1, 2, 3],
+        description: 'Task priority level',
+      },
+      ServiceConfig: {
+        type: 'object',
+        description: 'Configuration for a service',
+        required: ['name', 'mode'],
+        properties: {
+          name: { type: 'string' },
+          mode: { $ref: '#/components/schemas/ListenerMode' },
+          status: { $ref: '#/components/schemas/DeploymentStatus' },
+          modes: {
+            type: 'array',
+            items: { $ref: '#/components/schemas/ListenerMode' },
+          },
+        },
+      },
+    },
+  },
+};
+
 // OpenAPI spec with diverse schema types for testing GraphQL generation
 const graphqlTestSpec = {
   openapi: '3.0.0',
@@ -377,4 +416,169 @@ console.log(JSON.stringify(result, null, 2));
     const zipField = addressFields.find((f: any) => f.name === 'zipCode');
     expect(zipField.options.nullable).toBe(true);
   }, 180000); // 3 minute timeout for npm install + compile
+
+  it('should generate TypeScript enums with registerEnumType for enum schemas', async () => {
+    const TEST_ENUM_DIR = path.join(__dirname, '../../test-output/e2e-nestjs-graphql-enums');
+    const ENUM_MODELS_DIR = path.join(TEST_ENUM_DIR, 'models');
+    await ensureCleanDirectory(TEST_ENUM_DIR);
+
+    // Parse spec with enum schemas
+    const parser = new OpenAPIParser();
+    const ir = parser.parse(enumTestSpec, { includeOperations: false });
+
+    // Should have all schemas including enums
+    expect(ir.schemas.has('ListenerMode')).toBe(true);
+    expect(ir.schemas.has('DeploymentStatus')).toBe(true);
+    expect(ir.schemas.has('ServiceConfig')).toBe(true);
+
+    // Verify IR correctly identifies enum schemas
+    expect(ir.schemas.get('ListenerMode')!.type).toBe('enum');
+    expect(ir.schemas.get('DeploymentStatus')!.type).toBe('enum');
+    expect(ir.schemas.get('ServiceConfig')!.type).toBe('object');
+
+    // Generate code
+    const generator = new Generator({
+      outputDir: TEST_ENUM_DIR,
+      nestJsGraphql: true,
+      esm: false,
+      mode: 'models-only',
+    });
+    await generator.generate(ir);
+
+    // Verify enum files exist
+    const listenerModeFile = path.join(ENUM_MODELS_DIR, 'listener-mode.ts');
+    const deploymentStatusFile = path.join(ENUM_MODELS_DIR, 'deployment-status.ts');
+    const serviceConfigFile = path.join(ENUM_MODELS_DIR, 'service-config.ts');
+    expect(fs.existsSync(listenerModeFile)).toBe(true);
+    expect(fs.existsSync(deploymentStatusFile)).toBe(true);
+    expect(fs.existsSync(serviceConfigFile)).toBe(true);
+
+    const listenerModeContent = fs.readFileSync(listenerModeFile, 'utf-8');
+    const deploymentStatusContent = fs.readFileSync(deploymentStatusFile, 'utf-8');
+    const serviceConfigContent = fs.readFileSync(serviceConfigFile, 'utf-8');
+
+    // Verify ListenerMode is a TypeScript enum (not empty class)
+    expect(listenerModeContent).toContain('export enum ListenerMode');
+    expect(listenerModeContent).toContain("Http = \"http\"");
+    expect(listenerModeContent).toContain("Grpc = \"grpc\"");
+    expect(listenerModeContent).toContain("Tcp = \"tcp\"");
+    // Should NOT contain class declaration
+    expect(listenerModeContent).not.toContain('export class ListenerMode');
+    // Should NOT contain @Expose (class-transformer not needed for enums)
+    expect(listenerModeContent).not.toContain('@Expose');
+
+    // Verify registerEnumType call
+    expect(listenerModeContent).toContain('registerEnumType(ListenerMode');
+    expect(listenerModeContent).toContain("name: 'ListenerMode'");
+    expect(listenerModeContent).toContain('description: `Protocol mode for the listener`');
+
+    // Verify DeploymentStatus with hyphenated values → PascalCase members
+    expect(deploymentStatusContent).toContain('export enum DeploymentStatus');
+    expect(deploymentStatusContent).toContain("InProgress = \"in-progress\"");
+    expect(deploymentStatusContent).toContain("Completed = \"completed\"");
+    expect(deploymentStatusContent).toContain("Failed = \"failed\"");
+    expect(deploymentStatusContent).toContain("NotStarted = \"not-started\"");
+    expect(deploymentStatusContent).toContain('registerEnumType(DeploymentStatus');
+
+    // Verify ServiceConfig references enum types normally
+    expect(serviceConfigContent).toContain('export class ServiceConfig');
+    expect(serviceConfigContent).toContain('@ObjectType');
+    // Should import the enum
+    expect(serviceConfigContent).toContain('ListenerMode');
+    expect(serviceConfigContent).toContain('DeploymentStatus');
+
+    // Step: Compile and verify runtime behavior
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(TEST_ENUM_DIR, 'package.json'), 'utf-8')
+    );
+    packageJson.dependencies['@nestjs/common'] = '^10.0.0';
+    packageJson.dependencies['@nestjs/core'] = '^10.0.0';
+    packageJson.dependencies['graphql'] = '^16.0.0';
+    packageJson.dependencies['reflect-metadata'] = '^0.2.0';
+    packageJson.dependencies['rxjs'] = '^7.0.0';
+    packageJson.dependencies['@apollo/server'] = '^4.0.0';
+    fs.writeFileSync(
+      path.join(TEST_ENUM_DIR, 'package.json'),
+      JSON.stringify(packageJson, null, 2) + '\n',
+      'utf-8'
+    );
+
+    execSync('npm install --silent 2>&1', {
+      cwd: TEST_ENUM_DIR,
+      stdio: 'pipe',
+      timeout: 120000,
+    });
+
+    // Compile TypeScript - this verifies enum types are valid
+    execSync('npx tsc --skipLibCheck', {
+      cwd: TEST_ENUM_DIR,
+      stdio: 'pipe',
+      timeout: 60000,
+    });
+
+    // Verify enum registration at runtime
+    const runtimeScript = `
+require('reflect-metadata');
+
+// Import generated models
+const { ListenerMode } = require('./dist/listener-mode');
+const { DeploymentStatus } = require('./dist/deployment-status');
+const { ServiceConfig } = require('./dist/service-config');
+
+// Load lazy metadata
+const { LazyMetadataStorage } = require('@nestjs/graphql/dist/schema-builder/storages/lazy-metadata.storage');
+LazyMetadataStorage.load();
+
+const { TypeMetadataStorage } = require('@nestjs/graphql/dist/schema-builder/storages/type-metadata.storage');
+
+// Get registered enums
+const enumTypes = TypeMetadataStorage.getEnumsMetadata();
+const objectTypes = TypeMetadataStorage.getObjectTypesMetadata();
+
+const result = {
+  enums: enumTypes.map(e => ({
+    name: e.name,
+    description: e.description,
+    ref: e.ref ? e.ref.name || Object.keys(e.ref).join(',') : null,
+  })),
+  objectTypes: objectTypes.map(ot => ({
+    name: ot.name,
+    target: ot.target.name,
+  })),
+  // Verify enum values are accessible
+  listenerModeValues: Object.values(ListenerMode),
+  deploymentStatusValues: Object.values(DeploymentStatus),
+};
+
+console.log(JSON.stringify(result, null, 2));
+`;
+
+    const scriptPath = path.join(TEST_ENUM_DIR, 'verify-enums.js');
+    fs.writeFileSync(scriptPath, runtimeScript, 'utf-8');
+
+    const output = execSync('node verify-enums.js', {
+      cwd: TEST_ENUM_DIR,
+      stdio: 'pipe',
+      timeout: 30000,
+    }).toString();
+
+    const result = JSON.parse(output);
+
+    // Verify enums are registered
+    const enumNames = result.enums.map((e: any) => e.name);
+    expect(enumNames).toContain('ListenerMode');
+    expect(enumNames).toContain('DeploymentStatus');
+
+    // Verify description preserved
+    const listenerEnumMeta = result.enums.find((e: any) => e.name === 'ListenerMode');
+    expect(listenerEnumMeta.description).toBe('Protocol mode for the listener');
+
+    // Verify enum values
+    expect(result.listenerModeValues).toEqual(['http', 'grpc', 'tcp']);
+    expect(result.deploymentStatusValues).toEqual(['in-progress', 'completed', 'failed', 'not-started']);
+
+    // Verify ServiceConfig is registered as ObjectType (not broken by enum references)
+    const objectTypeNames = result.objectTypes.map((ot: any) => ot.target);
+    expect(objectTypeNames).toContain('ServiceConfig');
+  }, 180000);
 });

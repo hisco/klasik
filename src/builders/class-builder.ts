@@ -27,6 +27,8 @@ export interface GenerationContext {
   project: Project;
   importManager: ImportManager;
   options: GeneratorOptions;
+  /** Names of schemas with type 'enum' - used by plugins to handle enum references differently */
+  enumSchemaNames?: Set<string>;
 }
 
 /**
@@ -148,8 +150,8 @@ export class ClassBuilder {
       // Add vendorExtensions
       entry.vendorExtensions = prop.metadata.vendorExtensions || {};
 
-      // Add modelClass for complex types
-      if (this.isComplexType(prop.type)) {
+      // Add modelClass for complex types (skip enums - they're not classes)
+      if (this.isComplexType(prop.type) && !this.isEnumReference(prop.type)) {
         entry.modelClass = prop.type.name;
       }
 
@@ -279,6 +281,20 @@ export class ClassBuilder {
       default:
         return 'object';
     }
+  }
+
+  /**
+   * Check if a type references an enum schema
+   */
+  private isEnumReference(type: TypeReference): boolean {
+    if (!this.context.enumSchemaNames) return false;
+    if ((type.kind === 'reference' || type.kind === 'object') && type.name) {
+      return this.context.enumSchemaNames.has(type.name);
+    }
+    if (type.kind === 'array' && type.elementType) {
+      return this.isEnumReference(type.elementType);
+    }
+    return false;
   }
 
   /**

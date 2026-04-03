@@ -4,7 +4,7 @@
  * Defines the contract for generator plugins that extend functionality
  */
 
-import { ClassDeclaration, PropertyDeclaration } from 'ts-morph';
+import { ClassDeclaration, PropertyDeclaration, SourceFile } from 'ts-morph';
 import {
   SchemaDefinition,
   PropertyDefinition,
@@ -53,6 +53,16 @@ export interface GeneratorPlugin {
   decorateProperty?(
     property: PropertyDeclaration,
     propertyDef: PropertyDefinition,
+    schema: SchemaDefinition,
+    context: GenerationContext
+  ): void | Promise<void>;
+
+  /**
+   * Called when generating an enum schema
+   * Add enum-level decorations (e.g., registerEnumType for GraphQL)
+   */
+  decorateEnum?(
+    sourceFile: SourceFile,
     schema: SchemaDefinition,
     context: GenerationContext
   ): void | Promise<void>;
@@ -193,6 +203,21 @@ export class PluginRunner {
     for (const plugin of this.plugins) {
       if (plugin.decorateProperty) {
         await plugin.decorateProperty(property, propertyDef, schema, context);
+      }
+    }
+  }
+
+  /**
+   * Run decorateEnum hooks
+   */
+  async runDecorateEnum(
+    sourceFile: SourceFile,
+    schema: SchemaDefinition,
+    context: GenerationContext
+  ): Promise<void> {
+    for (const plugin of this.plugins) {
+      if (plugin.decorateEnum) {
+        await plugin.decorateEnum(sourceFile, schema, context);
       }
     }
   }

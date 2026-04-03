@@ -43,8 +43,8 @@ export class ClassTransformerPlugin implements GeneratorPlugin {
       arguments: [],
     });
 
-    // Add @Type() for complex types
-    const typeDecorator = this.getTypeDecorator(propertyDef.type);
+    // Add @Type() for complex types (skip enum references - enums are not classes)
+    const typeDecorator = this.getTypeDecorator(propertyDef.type, context.enumSchemaNames);
     if (typeDecorator) {
       context.importManager.addImport('class-transformer', 'Type');
       property.addDecorator({
@@ -67,13 +67,25 @@ export class ClassTransformerPlugin implements GeneratorPlugin {
   }
 
   /**
+   * Check if a type name is an enum schema (enums don't need @Type)
+   */
+  private isEnumReference(typeName: string | undefined, enumSchemaNames?: Set<string>): boolean {
+    if (!typeName || !enumSchemaNames) return false;
+    return enumSchemaNames.has(typeName);
+  }
+
+  /**
    * Get @Type() decorator argument for a type
    * Returns undefined if no @Type() decorator is needed
    */
-  private getTypeDecorator(type: TypeReference): string | undefined {
+  private getTypeDecorator(type: TypeReference, enumSchemaNames?: Set<string>): string | undefined {
     switch (type.kind) {
       case 'reference':
       case 'object':
+        // Skip enum references - enums are plain values, not class instances
+        if (this.isEnumReference(type.name, enumSchemaNames)) {
+          return undefined;
+        }
         // @Type(() => ClassName)
         if (type.name) {
           return `() => ${type.name}`;
@@ -86,6 +98,10 @@ export class ClassTransformerPlugin implements GeneratorPlugin {
         }
         // For arrays of complex types: @Type(() => ClassName)
         if (type.elementType.kind === 'reference' || type.elementType.kind === 'object') {
+          // Skip enum references
+          if (this.isEnumReference(type.elementType.name, enumSchemaNames)) {
+            return undefined;
+          }
           return `() => ${type.elementType.name}`;
         }
         // For arrays of primitives, no @Type() needed
@@ -97,6 +113,9 @@ export class ClassTransformerPlugin implements GeneratorPlugin {
             (type.additionalProperties.kind === 'reference' ||
              type.additionalProperties.kind === 'object') &&
             type.additionalProperties.name) {
+          if (this.isEnumReference(type.additionalProperties.name, enumSchemaNames)) {
+            return undefined;
+          }
           return `() => ${type.additionalProperties.name}`;
         }
         return undefined;

@@ -5,7 +5,7 @@
  * Properly handles types, descriptions, constraints, and examples
  */
 
-import { PropertyDeclaration } from 'ts-morph';
+import { PropertyDeclaration, SourceFile } from 'ts-morph';
 import { GeneratorPlugin } from './plugin-interface';
 import {
   SchemaDefinition,
@@ -35,13 +35,25 @@ export class NestJSSwaggerPlugin implements GeneratorPlugin {
     schema: SchemaDefinition,
     context: GenerationContext
   ): void {
-    const options = this.buildApiPropertyOptions(propertyDef, schema);
+    const options = this.buildApiPropertyOptions(propertyDef, schema, context);
     const optionsStr = this.buildOptionsString(options);
 
     property.addDecorator({
       name: 'ApiProperty',
       arguments: [optionsStr],
     });
+  }
+
+  /**
+   * Add @ApiExtraModels for enum types so Swagger discovers them
+   */
+  decorateEnum(
+    sourceFile: SourceFile,
+    schema: SchemaDefinition,
+    context: GenerationContext
+  ): void {
+    // No Swagger-specific decoration needed for enum files
+    // Enum values are handled at the property level via { enum: EnumName }
   }
 
   /**
@@ -60,14 +72,34 @@ export class NestJSSwaggerPlugin implements GeneratorPlugin {
    */
   private buildApiPropertyOptions(
     propertyDef: PropertyDefinition,
-    schema: SchemaDefinition
+    schema: SchemaDefinition,
+    context?: GenerationContext
   ): Record<string, any> {
     const options: Record<string, any> = {};
 
-    // Type - use constructor reference (String, Number, Boolean, not 'string', 'number', 'boolean')
-    const swaggerType = this.getSwaggerType(propertyDef.type);
-    if (swaggerType) {
-      options.type = swaggerType;
+    // Check if this property references an enum schema
+    const enumRefName = this.getEnumReferenceName(propertyDef.type, context?.enumSchemaNames);
+    if (enumRefName) {
+      // Use enum: EnumName for enum references (not type: () => EnumName)
+      options.enum = enumRefName;
+    } else if (propertyDef.type.kind === 'array' && propertyDef.type.elementType) {
+      // Check for arrays of enums
+      const arrayEnumName = this.getEnumReferenceName(propertyDef.type.elementType, context?.enumSchemaNames);
+      if (arrayEnumName) {
+        options.enum = arrayEnumName;
+        options.isArray = true;
+      } else {
+        const swaggerType = this.getSwaggerType(propertyDef.type);
+        if (swaggerType) {
+          options.type = swaggerType;
+        }
+      }
+    } else {
+      // Type - use constructor reference (String, Number, Boolean, not 'string', 'number', 'boolean')
+      const swaggerType = this.getSwaggerType(propertyDef.type);
+      if (swaggerType) {
+        options.type = swaggerType;
+      }
     }
 
     // Description
@@ -132,6 +164,20 @@ export class NestJSSwaggerPlugin implements GeneratorPlugin {
     }
 
     return options;
+  }
+
+  /**
+   * Get the enum type name if a type references an enum schema
+   * Returns the enum name for direct references, null otherwise
+   */
+  private getEnumReferenceName(type: TypeReference, enumSchemaNames?: Set<string>): string | null {
+    if (!enumSchemaNames) return null;
+
+    if ((type.kind === 'reference' || type.kind === 'object') && type.name && enumSchemaNames.has(type.name)) {
+      return type.name;
+    }
+
+    return null;
   }
 
   /**
@@ -201,6 +247,9 @@ export class NestJSSwaggerPlugin implements GeneratorPlugin {
         if (value.startsWith('()') || value === 'String' || value === 'Number' ||
             value === 'Boolean' || value === 'Object' || value.startsWith('[')) {
           // Don't quote function references or constructor names
+          valueStr = value;
+        } else if (key === 'enum' && /^[A-Z]/.test(value)) {
+          // Enum type reference - output as bare identifier
           valueStr = value;
         } else {
           // Quote strings and use template literal for proper escaping

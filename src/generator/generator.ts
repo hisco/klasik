@@ -11,6 +11,7 @@ import {
   SchemaIR,
   SchemaDefinition,
 } from '../ir/types';
+import { SourceFile } from 'ts-morph';
 import { ImportManager } from '../builders/import-manager';
 import { ClassBuilder, GenerationContext, GeneratorOptions } from '../builders/class-builder';
 import { PluginRegistry, PluginRunner } from '../plugins/plugin-interface';
@@ -63,7 +64,7 @@ export class Generator {
     this.ensureOutputDirectory();
 
     // Create generation context
-    const context = this.createContext();
+    const context = this.createContext(ir);
 
     // Run before generation hooks
     await this.pluginRunner.runBeforeGeneration(context, ir);
@@ -122,6 +123,11 @@ export class Generator {
     context: GenerationContext,
     modelsDir: string
   ): Promise<void> {
+    // Generate TypeScript enum for enum schemas
+    if (schema.type === 'enum') {
+      return this.generateEnumModel(schema, context, modelsDir);
+    }
+
     // Determine file name using centralized logic
     const fileName = this.getSchemaFileName(schema) + '.ts';
     const filePath = path.join(modelsDir, fileName);
@@ -176,6 +182,115 @@ export class Generator {
     builder.format();
 
     // Build completes when we save the project
+  }
+
+  /**
+   * Generate a TypeScript enum file for an enum schema
+   */
+  private async generateEnumModel(
+    schema: SchemaDefinition,
+    context: GenerationContext,
+    modelsDir: string
+  ): Promise<void> {
+    const fileName = this.getSchemaFileName(schema) + '.ts';
+    const filePath = path.join(modelsDir, fileName);
+
+    // Create source file
+    const sourceFile = this.project.createSourceFile(filePath, '', { overwrite: true });
+
+    // Create a fresh ImportManager (not cloned from global - enums don't need class-transformer imports)
+    const fileImportManager = new ImportManager({ esm: this.options.esm });
+    const fileContext: GenerationContext = {
+      ...context,
+      importManager: fileImportManager,
+    };
+
+    // Build enum members
+    const members = this.buildEnumMembers(schema);
+
+    // Add enum declaration
+    const enumDecl = sourceFile.addEnum({
+      name: schema.name,
+      isExported: true,
+      members,
+    });
+
+    // Add JSDoc
+    if (schema.description) {
+      enumDecl.addJsDoc({
+        description: schema.description,
+      });
+    }
+
+    // Run plugin hooks for enum decoration
+    await this.pluginRunner.runDecorateEnum(sourceFile, schema, fileContext);
+
+    // Apply imports
+    fileImportManager.applyToSourceFile(sourceFile);
+
+    // Format
+    sourceFile.formatText({
+      indentSize: 2,
+      convertTabsToSpaces: true,
+    });
+  }
+
+  /**
+   * Build enum member declarations from schema enumValues
+   */
+  private buildEnumMembers(schema: SchemaDefinition): Array<{ name: string; value: string | number }> {
+    if (!schema.enumValues || schema.enumValues.length === 0) {
+      return [];
+    }
+
+    const usedNames = new Set<string>();
+    return schema.enumValues.map(value => {
+      let name = this.enumValueToMemberName(value);
+
+      // Deduplicate member names
+      if (usedNames.has(name)) {
+        let suffix = 2;
+        while (usedNames.has(`${name}${suffix}`)) {
+          suffix++;
+        }
+        name = `${name}${suffix}`;
+      }
+      usedNames.add(name);
+
+      return {
+        name,
+        value: typeof value === 'string' ? value : value,
+      };
+    });
+  }
+
+  /**
+   * Convert an enum value to a valid TypeScript enum member name (PascalCase)
+   */
+  private enumValueToMemberName(value: string | number): string {
+    if (typeof value === 'number') {
+      return `_${value}`;
+    }
+
+    // Replace non-alphanumeric chars with separator, then PascalCase
+    let name = value
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .split('_')
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join('');
+
+    // Ensure starts with letter or underscore
+    if (/^[0-9]/.test(name)) {
+      name = '_' + name;
+    }
+
+    // Handle empty string
+    if (!name) {
+      name = 'Empty';
+    }
+
+    return name;
   }
 
   /**
@@ -412,11 +527,22 @@ export class Generator {
   /**
    * Create generation context
    */
-  private createContext(): GenerationContext {
+  private createContext(ir?: SchemaIR): GenerationContext {
+    // Collect enum schema names so plugins can handle enum references differently
+    const enumSchemaNames = new Set<string>();
+    if (ir) {
+      for (const [name, schema] of ir.schemas) {
+        if (schema.type === 'enum') {
+          enumSchemaNames.add(name);
+        }
+      }
+    }
+
     return {
       project: this.project,
       importManager: new ImportManager({ esm: this.options.esm }),
       options: this.options,
+      enumSchemaNames,
     };
   }
 

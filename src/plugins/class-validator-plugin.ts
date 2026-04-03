@@ -83,24 +83,38 @@ export class ClassValidatorPlugin implements GeneratorPlugin {
         context.importManager.addImport('class-validator', 'IsArray');
         property.addDecorator({ name: 'IsArray', arguments: [] });
 
-        // Add @ValidateNested({ each: true }) for arrays of objects
+        // Add validation for arrays of objects or enums
         if (type.elementType &&
             (type.elementType.kind === 'reference' || type.elementType.kind === 'object')) {
-          context.importManager.addImport('class-validator', 'ValidateNested');
-          property.addDecorator({
-            name: 'ValidateNested',
-            arguments: ['{ each: true }'],
-          });
-
-          // Also need @Type() which is added by ClassTransformerPlugin
+          if (type.elementType.name && context.enumSchemaNames?.has(type.elementType.name)) {
+            // Arrays of enums: use @IsEnum(EnumType, { each: true })
+            context.importManager.addImport('class-validator', 'IsEnum');
+            property.addDecorator({
+              name: 'IsEnum',
+              arguments: [type.elementType.name, '{ each: true }'],
+            });
+          } else {
+            // Arrays of objects: use @ValidateNested({ each: true })
+            context.importManager.addImport('class-validator', 'ValidateNested');
+            property.addDecorator({
+              name: 'ValidateNested',
+              arguments: ['{ each: true }'],
+            });
+          }
         }
         break;
 
       case 'reference':
       case 'object':
-        // For nested objects
-        context.importManager.addImport('class-validator', 'ValidateNested');
-        property.addDecorator({ name: 'ValidateNested', arguments: [] });
+        // For enum references, use @IsEnum() instead of @ValidateNested()
+        if (type.name && context.enumSchemaNames?.has(type.name)) {
+          context.importManager.addImport('class-validator', 'IsEnum');
+          property.addDecorator({ name: 'IsEnum', arguments: [type.name] });
+        } else {
+          // For nested objects
+          context.importManager.addImport('class-validator', 'ValidateNested');
+          property.addDecorator({ name: 'ValidateNested', arguments: [] });
+        }
         break;
 
       case 'dictionary':

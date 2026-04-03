@@ -5,7 +5,7 @@
  * Properly handles types, descriptions, nullability, and deprecation
  */
 
-import { ClassDeclaration, PropertyDeclaration } from 'ts-morph';
+import { ClassDeclaration, PropertyDeclaration, SourceFile } from 'ts-morph';
 import { GeneratorPlugin } from './plugin-interface';
 import {
   SchemaDefinition,
@@ -78,6 +78,25 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
       name: 'Field',
       arguments: [`() => ${fieldType}${optionsStr}`],
     });
+  }
+
+  /**
+   * Register enum types with NestJS GraphQL
+   */
+  decorateEnum(
+    sourceFile: SourceFile,
+    schema: SchemaDefinition,
+    context: GenerationContext
+  ): void {
+    context.importManager.addImport('@nestjs/graphql', 'registerEnumType');
+
+    let optionsStr = `{ name: '${schema.name}'`;
+    if (schema.description) {
+      optionsStr += `, description: \`${this.escapeForTemplate(schema.description)}\``;
+    }
+    optionsStr += ' }';
+
+    sourceFile.addStatements(`\nregisterEnumType(${schema.name}, ${optionsStr});`);
   }
 
   /**

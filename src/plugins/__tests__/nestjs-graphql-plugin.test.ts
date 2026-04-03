@@ -522,6 +522,55 @@ describe('NestJSGraphQLPlugin', () => {
     });
   });
 
+  describe('decorateEnum', () => {
+    it('should add registerEnumType call for enum schema', () => {
+      const sourceFile = project.createSourceFile('status.ts',
+        `export enum Status {\n  Active = 'active',\n  Inactive = 'inactive',\n}`
+      );
+      const schema = ImportedIRHelpers.createSchema('Status');
+      schema.type = 'enum';
+      schema.enumValues = ['active', 'inactive'];
+
+      plugin.decorateEnum(sourceFile, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain('registerEnumType(Status');
+      expect(text).toContain("name: 'Status'");
+      expect(importManager.hasImport('@nestjs/graphql')).toBe(true);
+    });
+
+    it('should include description in registerEnumType when present', () => {
+      const sourceFile = project.createSourceFile('status2.ts',
+        `export enum Status {\n  Active = 'active',\n}`
+      );
+      const schema = ImportedIRHelpers.createSchema('Status');
+      schema.type = 'enum';
+      schema.enumValues = ['active'];
+      schema.description = 'Entity status';
+
+      plugin.decorateEnum(sourceFile, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain('description: `Entity status`');
+    });
+
+    it('should escape special characters in enum description', () => {
+      const sourceFile = project.createSourceFile('mode.ts',
+        `export enum Mode {\n  Fast = 'fast',\n}`
+      );
+      const schema = ImportedIRHelpers.createSchema('Mode');
+      schema.type = 'enum';
+      schema.enumValues = ['fast'];
+      schema.description = 'Use `mode` with $variable';
+
+      plugin.decorateEnum(sourceFile, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain('\\`mode\\`');
+      expect(text).toContain('\\$variable');
+    });
+  });
+
   describe('modifyPackageJson', () => {
     it('should add @nestjs/graphql to existing dependencies', () => {
       const packageJson: any = {
