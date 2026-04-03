@@ -977,7 +977,10 @@ klasik generate [options]
 | `--template <dir>` | Custom template directory | - |
 | `--keep-spec` | Keep downloaded spec file(s) | `false` |
 | `--export-style <style>` | Export style: `namespace`, `direct`, `both`, `none` | `namespace` |
+| `--allow-union-responses` | Skip response transformation for union (oneOf/anyOf) types | `false` |
 | `--clean` | Remove output directory before generation | `false` |
+
+> **Union response types:** By default, klasik fails at generation time when an endpoint returns a union type (oneOf/anyOf), because `plainToInstance` cannot handle union types. Pass `--allow-union-responses` to skip response transformation for those endpoints instead of failing.
 
 **Examples:**
 
