@@ -745,14 +745,14 @@ properties:
 
   describe('local file nested refs with fragments (customer reproduction)', () => {
     /**
-     * Exact reproduction of customer-reported bug:
+     * Tests nested relative $ref between sibling schema files:
      * api/
-     *   openapi.yaml          # $ref: './schemas/service.yaml#/components/schemas/Service'
+     *   openapi.yaml          # $ref: './schemas/entity.yaml#/components/schemas/Entity'
      *   schemas/
-     *     service.yaml        # $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
-     *     vcs.yaml            # defines WorkloadRepo
+     *     entity.yaml         # $ref: './metadata.yaml#/components/schemas/Metadata'
+     *     metadata.yaml       # defines Metadata
      *
-     * Error was: Cannot inline ref "./vcs.yaml#/components/schemas/WorkloadRepo": not found in resolved refs
+     * Previously failed: Cannot inline ref "./metadata.yaml#/...": not found in resolved refs
      */
     const tempDir = path.join(__dirname, '../../test-output/ref-resolution-local');
 
@@ -770,54 +770,52 @@ properties:
     });
 
     it('should resolve nested relative refs between sibling schema files', async () => {
-      // openapi.yaml references ./schemas/service.yaml#/...
       fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
 openapi: 3.0.0
 info:
-  title: Deployment API
+  title: Platform API
   version: 1.0.0
 components:
   schemas:
-    Service:
-      $ref: './schemas/service.yaml#/components/schemas/Service'
-    WorkloadRepo:
-      $ref: './schemas/vcs.yaml#/components/schemas/WorkloadRepo'
+    Entity:
+      $ref: './schemas/entity.yaml#/components/schemas/Entity'
+    Metadata:
+      $ref: './schemas/metadata.yaml#/components/schemas/Metadata'
 `);
 
-      // service.yaml references sibling ./vcs.yaml#/...
-      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'service.yaml'), `
+      // entity.yaml references sibling ./metadata.yaml#/...
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'entity.yaml'), `
 components:
   schemas:
-    Service:
+    Entity:
       type: object
       properties:
         name:
           type: string
-        repo:
-          $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
+        meta:
+          $ref: './metadata.yaml#/components/schemas/Metadata'
       required:
         - name
 `);
 
-      // vcs.yaml defines WorkloadRepo
-      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'vcs.yaml'), `
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'metadata.yaml'), `
 components:
   schemas:
-    WorkloadRepo:
+    Metadata:
       type: object
       properties:
-        url:
+        key:
           type: string
-        branch:
+        value:
           type: string
-        provider:
+        source:
           type: string
           enum:
-            - github
-            - gitlab
-            - bitbucket
+            - manual
+            - automated
+            - imported
       required:
-        - url
+        - key
 `);
 
       const specPath = path.join(tempDir, 'api', 'openapi.yaml');
@@ -827,36 +825,34 @@ components:
         resolveRefs: true,
       });
 
-      // Service should be fully resolved with nested WorkloadRepo
-      const service = spec.components.schemas.Service;
-      expect(service.type).toBe('object');
-      expect(service.properties.name.type).toBe('string');
+      // Entity should be promoted to components/schemas with proper structure
+      const entity = spec.components.schemas.Entity;
+      expect(entity.type).toBe('object');
+      expect(entity.properties.name.type).toBe('string');
 
-      // The nested ref from service.yaml → vcs.yaml should be inlined
-      const repo = service.properties.repo;
-      expect(repo.type).toBe('object');
-      expect(repo.properties.url.type).toBe('string');
-      expect(repo.properties.branch.type).toBe('string');
-      expect(repo.properties.provider.type).toBe('string');
-      expect(repo.properties.provider.enum).toEqual(['github', 'gitlab', 'bitbucket']);
+      // The nested ref from entity.yaml → metadata.yaml should be promoted as internal $ref
+      const meta = entity.properties.meta;
+      expect(meta.$ref).toBe('#/components/schemas/Metadata');
 
-      // Direct ref to WorkloadRepo should also work
-      const workloadRepo = spec.components.schemas.WorkloadRepo;
-      expect(workloadRepo.type).toBe('object');
-      expect(workloadRepo.properties.url.type).toBe('string');
+      // Metadata should be promoted to components/schemas
+      const metadata = spec.components.schemas.Metadata;
+      expect(metadata.type).toBe('object');
+      expect(metadata.properties.key.type).toBe('string');
+      expect(metadata.properties.value.type).toBe('string');
+      expect(metadata.properties.source.type).toBe('string');
+      expect(metadata.properties.source.enum).toEqual(['manual', 'automated', 'imported']);
     });
 
     it('should generate models from local spec with nested refs and fragments', async () => {
-      // Same file structure as above
       fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
 openapi: 3.0.0
 info:
-  title: Deployment API
+  title: Platform API
   version: 1.0.0
 paths:
-  /services:
+  /entities:
     get:
-      operationId: listServices
+      operationId: listEntities
       responses:
         '200':
           description: Success
@@ -865,39 +861,39 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Service'
+                  $ref: '#/components/schemas/Entity'
 components:
   schemas:
-    Service:
-      $ref: './schemas/service.yaml#/components/schemas/Service'
+    Entity:
+      $ref: './schemas/entity.yaml#/components/schemas/Entity'
 `);
 
-      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'service.yaml'), `
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'entity.yaml'), `
 components:
   schemas:
-    Service:
+    Entity:
       type: object
       properties:
         name:
           type: string
-        repo:
-          $ref: './vcs.yaml#/components/schemas/WorkloadRepo'
+        meta:
+          $ref: './metadata.yaml#/components/schemas/Metadata'
       required:
         - name
 `);
 
-      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'vcs.yaml'), `
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'metadata.yaml'), `
 components:
   schemas:
-    WorkloadRepo:
+    Metadata:
       type: object
       properties:
-        url:
+        key:
           type: string
-        branch:
+        value:
           type: string
       required:
-        - url
+        - key
 `);
 
       const specPath = path.join(tempDir, 'api', 'openapi.yaml');
@@ -914,13 +910,236 @@ components:
       const generator = new Generator({ outputDir });
       await generator.generate(ir);
 
-      // Verify Service model was generated
-      const serviceFile = path.join(outputDir, 'models', 'service.ts');
-      expect(fs.existsSync(serviceFile)).toBe(true);
-      const serviceCode = fs.readFileSync(serviceFile, 'utf-8');
-      expect(serviceCode).toContain('export class Service');
-      expect(serviceCode).toContain('name');
-      expect(serviceCode).toContain('repo');
+      // Verify Entity model was generated
+      const entityFile = path.join(outputDir, 'models', 'entity.ts');
+      expect(fs.existsSync(entityFile)).toBe(true);
+      const entityCode = fs.readFileSync(entityFile, 'utf-8');
+      expect(entityCode).toContain('export class Entity');
+      expect(entityCode).toContain('name');
+      expect(entityCode).toContain('meta');
+    });
+  });
+
+  describe('schema promotion from sub-files', () => {
+    /**
+     * Tests that schemas defined in sub-files are promoted to components/schemas
+     * and generate standalone model files, not just inlined as raw content.
+     */
+    const tempDir = path.join(__dirname, '../../test-output/ref-resolution-promote');
+
+    beforeEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+      fs.mkdirSync(path.join(tempDir, 'api', 'schemas'), { recursive: true });
+    });
+
+    afterEach(() => {
+      if (fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true });
+      }
+    });
+
+    it('should promote sub-file schemas to standalone models', async () => {
+      // Main spec defines some schemas directly, references others from sub-files
+      fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
+openapi: 3.0.0
+info:
+  title: Platform API
+  version: 1.0.0
+paths:
+  /projects:
+    get:
+      operationId: listProjects
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+components:
+  schemas:
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        config:
+          $ref: './schemas/config.yaml#/components/schemas/ProjectConfig'
+      required:
+        - id
+        - name
+    Status:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+`);
+
+      // Sub-file defines ProjectConfig which references ResourceQuota
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'config.yaml'), `
+components:
+  schemas:
+    ProjectConfig:
+      type: object
+      properties:
+        region:
+          type: string
+        tier:
+          type: string
+          enum:
+            - free
+            - standard
+            - enterprise
+        quota:
+          $ref: './resources.yaml#/components/schemas/ResourceQuota'
+      required:
+        - region
+`);
+
+      // Another sub-file defines ResourceQuota
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'resources.yaml'), `
+components:
+  schemas:
+    ResourceQuota:
+      type: object
+      properties:
+        maxCpu:
+          type: integer
+        maxMemoryMb:
+          type: integer
+        maxInstances:
+          type: integer
+      required:
+        - maxCpu
+`);
+
+      const specPath = path.join(tempDir, 'api', 'openapi.yaml');
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: specPath,
+        resolveRefs: true,
+      });
+
+      // Parse and generate
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec);
+      const outputDir = path.join(tempDir, 'generated');
+      const generator = new Generator({ outputDir });
+      await generator.generate(ir);
+
+      // Directly defined schemas should exist
+      const projectFile = path.join(outputDir, 'models', 'project.ts');
+      expect(fs.existsSync(projectFile)).toBe(true);
+      const projectCode = fs.readFileSync(projectFile, 'utf-8');
+      expect(projectCode).toContain('export class Project');
+      expect(projectCode).toContain('config');
+
+      const statusFile = path.join(outputDir, 'models', 'status.ts');
+      expect(fs.existsSync(statusFile)).toBe(true);
+
+      // Sub-file schemas should be promoted and generate standalone model files
+      const configFile = path.join(outputDir, 'models', 'project-config.ts');
+      expect(fs.existsSync(configFile)).toBe(true);
+      const configCode = fs.readFileSync(configFile, 'utf-8');
+      expect(configCode).toContain('export class ProjectConfig');
+      expect(configCode).toContain('region');
+      expect(configCode).toContain('tier');
+      expect(configCode).toContain('quota');
+
+      const quotaFile = path.join(outputDir, 'models', 'resource-quota.ts');
+      expect(fs.existsSync(quotaFile)).toBe(true);
+      const quotaCode = fs.readFileSync(quotaFile, 'utf-8');
+      expect(quotaCode).toContain('export class ResourceQuota');
+      expect(quotaCode).toContain('maxCpu');
+      expect(quotaCode).toContain('maxMemoryMb');
+      expect(quotaCode).toContain('maxInstances');
+    });
+
+    it('should promote schemas referenced only from paths (not in components/schemas)', async () => {
+      // Main spec references sub-file schema directly from a path response
+      fs.writeFileSync(path.join(tempDir, 'api', 'openapi.yaml'), `
+openapi: 3.0.0
+info:
+  title: Platform API
+  version: 1.0.0
+paths:
+  /audit-log:
+    get:
+      operationId: getAuditLog
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/audit.yaml#/components/schemas/AuditEntry'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        name:
+          type: string
+`);
+
+      fs.writeFileSync(path.join(tempDir, 'api', 'schemas', 'audit.yaml'), `
+components:
+  schemas:
+    AuditEntry:
+      type: object
+      properties:
+        action:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        actor:
+          type: string
+      required:
+        - action
+        - timestamp
+`);
+
+      const specPath = path.join(tempDir, 'api', 'openapi.yaml');
+      const loader = new SpecLoader();
+      const spec = await loader.loadWithRefs({
+        url: specPath,
+        resolveRefs: true,
+      });
+
+      // AuditEntry should be promoted to components/schemas
+      expect(spec.components.schemas.AuditEntry).toBeDefined();
+      expect(spec.components.schemas.AuditEntry.type).toBe('object');
+      expect(spec.components.schemas.AuditEntry.properties.action.type).toBe('string');
+
+      // Path should reference the promoted schema via internal $ref
+      const responseSchema =
+        spec.paths['/audit-log'].get.responses['200'].content['application/json'].schema;
+      expect(responseSchema.$ref).toBe('#/components/schemas/AuditEntry');
+
+      // Parse and generate
+      const parser = new OpenAPIParser();
+      const ir = parser.parse(spec);
+      const outputDir = path.join(tempDir, 'generated');
+      const generator = new Generator({ outputDir });
+      await generator.generate(ir);
+
+      // AuditEntry should have its own model file
+      const auditFile = path.join(outputDir, 'models', 'audit-entry.ts');
+      expect(fs.existsSync(auditFile)).toBe(true);
+      const auditCode = fs.readFileSync(auditFile, 'utf-8');
+      expect(auditCode).toContain('export class AuditEntry');
+      expect(auditCode).toContain('action');
+      expect(auditCode).toContain('timestamp');
     });
   });
 

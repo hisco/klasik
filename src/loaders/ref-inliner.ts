@@ -10,6 +10,7 @@
  * - Handles nested refs (ref within ref)
  * - Deep clones to avoid mutations
  * - Recursively traverses spec object
+ * - Promotes external schema refs to components/schemas
  */
 
 import { RefResolver } from './ref-resolver';
@@ -38,10 +39,12 @@ export class RefInliner {
   private resolvedRefs: Map<string, any>;
   private refResolver: RefResolver;
   private baseUrl?: string;
+  private promotedSchemas: Map<string, any>;
 
   constructor() {
     this.resolvedRefs = new Map();
     this.refResolver = new RefResolver();
+    this.promotedSchemas = new Map();
   }
 
   /**
@@ -58,12 +61,28 @@ export class RefInliner {
   ): any {
     this.resolvedRefs = resolvedRefs;
     this.baseUrl = options.baseUrl;
+    this.promotedSchemas = new Map();
 
     // Deep clone to avoid mutating original spec
     const cloned = this.deepClone(spec);
 
     // Recursively inline refs
-    return this.inlineRefs(cloned);
+    const result = this.inlineRefs(cloned);
+
+    // Merge promoted schemas into components/schemas
+    if (this.promotedSchemas.size > 0) {
+      if (!result.components) {
+        result.components = {};
+      }
+      if (!result.components.schemas) {
+        result.components.schemas = {};
+      }
+      for (const [name, schema] of this.promotedSchemas) {
+        result.components.schemas[name] = schema;
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -126,6 +145,9 @@ export class RefInliner {
     // Split ref into file part and fragment part
     const [filePart, fragment] = ref.split('#');
 
+    // Check if this ref points to a named schema that should be promoted
+    const schemaName = this.extractSchemaName(fragment);
+
     // Try to get resolved content
     // RefResolver stores content with the original ref as key
     let content = this.resolvedRefs.get(ref);
@@ -168,7 +190,35 @@ export class RefInliner {
     content = this.deepClone(content);
 
     // Recursively inline any refs within this content
-    return this.inlineRefs(content);
+    content = this.inlineRefs(content);
+
+    // If this ref points to a named schema, promote it to components/schemas
+    // and return an internal $ref instead of inline content
+    if (schemaName && !this.promotedSchemas.has(schemaName)) {
+      this.promotedSchemas.set(schemaName, content);
+      return { $ref: `#/components/schemas/${schemaName}` };
+    } else if (schemaName && this.promotedSchemas.has(schemaName)) {
+      // Already promoted — just return the internal ref
+      return { $ref: `#/components/schemas/${schemaName}` };
+    }
+
+    return content;
+  }
+
+  /**
+   * Extract a schema name from a $ref fragment
+   * Matches patterns like /components/schemas/Name or /definitions/Name
+   * @param fragment The fragment part of the ref (after #)
+   * @returns Schema name or null if not a schema ref
+   */
+  private extractSchemaName(fragment?: string): string | null {
+    if (!fragment) {
+      return null;
+    }
+    const match = fragment.match(
+      /\/(?:components\/schemas|definitions)\/([^/]+)$/
+    );
+    return match ? match[1] : null;
   }
 
   /**

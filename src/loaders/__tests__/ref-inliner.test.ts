@@ -345,7 +345,7 @@ describe('RefInliner', () => {
       });
     });
 
-    it('should handle multiple levels of fragment paths', () => {
+    it('should promote schema refs with fragments to components/schemas', () => {
       const spec = {
         schema: { $ref: './api.yaml#/components/schemas/User' },
       };
@@ -371,12 +371,200 @@ describe('RefInliner', () => {
 
       const result = inliner.inline(spec, resolvedRefs);
 
+      // Schema ref should be promoted to components/schemas
       expect(result.schema).toEqual({
+        $ref: '#/components/schemas/User',
+      });
+
+      // Promoted schema should be in components/schemas
+      expect(result.components.schemas.User).toEqual({
         type: 'object',
         properties: {
           id: { type: 'integer' },
           name: { type: 'string' },
         },
+      });
+    });
+  });
+
+  describe('schema promotion', () => {
+    it('should promote Swagger 2.0 definitions refs', () => {
+      const spec = {
+        schema: { $ref: './types.yaml#/definitions/Account' },
+      };
+
+      const resolvedRefs = new Map([
+        [
+          './types.yaml',
+          {
+            definitions: {
+              Account: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      expect(result.schema).toEqual({
+        $ref: '#/components/schemas/Account',
+      });
+      expect(result.components.schemas.Account).toEqual({
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+      });
+    });
+
+    it('should not promote refs without schema fragment', () => {
+      const spec = {
+        schema: { $ref: './types.yaml' },
+      };
+
+      const resolvedRefs = new Map([
+        ['./types.yaml', { type: 'object', properties: { id: { type: 'string' } } }],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      // Should be inlined as raw content, not promoted
+      expect(result.schema).toEqual({
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+        },
+      });
+      expect(result.components).toBeUndefined();
+    });
+
+    it('should not promote refs with non-schema fragments', () => {
+      const spec = {
+        schema: { $ref: './types.yaml#/info/contact' },
+      };
+
+      const resolvedRefs = new Map([
+        [
+          './types.yaml',
+          {
+            info: {
+              contact: {
+                name: 'Support',
+                email: 'support@example.com',
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      // Should be inlined as raw content, not promoted
+      expect(result.schema).toEqual({ name: 'Support', email: 'support@example.com' });
+      expect(result.components).toBeUndefined();
+    });
+
+    it('should promote nested schema refs from within promoted schemas', () => {
+      const spec = {
+        schema: { $ref: './order.yaml#/components/schemas/Order' },
+      };
+
+      const resolvedRefs = new Map([
+        [
+          './order.yaml',
+          {
+            components: {
+              schemas: {
+                Order: {
+                  type: 'object',
+                  properties: {
+                    item: { $ref: './item.yaml#/components/schemas/LineItem' },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        [
+          './item.yaml',
+          {
+            components: {
+              schemas: {
+                LineItem: {
+                  type: 'object',
+                  properties: {
+                    sku: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      // Both schemas should be promoted
+      expect(result.schema).toEqual({ $ref: '#/components/schemas/Order' });
+      expect(result.components.schemas.Order).toEqual({
+        type: 'object',
+        properties: {
+          item: { $ref: '#/components/schemas/LineItem' },
+        },
+      });
+      expect(result.components.schemas.LineItem).toEqual({
+        type: 'object',
+        properties: {
+          sku: { type: 'string' },
+        },
+      });
+    });
+
+    it('should not overwrite existing components/schemas entries', () => {
+      const spec = {
+        components: {
+          schemas: {
+            Existing: {
+              type: 'object',
+              properties: { name: { type: 'string' } },
+            },
+          },
+        },
+        data: { $ref: './ext.yaml#/components/schemas/New' },
+      };
+
+      const resolvedRefs = new Map([
+        [
+          './ext.yaml',
+          {
+            components: {
+              schemas: {
+                New: {
+                  type: 'object',
+                  properties: { value: { type: 'number' } },
+                },
+              },
+            },
+          },
+        ],
+      ]);
+
+      const result = inliner.inline(spec, resolvedRefs);
+
+      // Existing schema should be preserved
+      expect(result.components.schemas.Existing).toEqual({
+        type: 'object',
+        properties: { name: { type: 'string' } },
+      });
+      // New schema should be promoted
+      expect(result.components.schemas.New).toEqual({
+        type: 'object',
+        properties: { value: { type: 'number' } },
       });
     });
   });
