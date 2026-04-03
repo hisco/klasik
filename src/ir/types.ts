@@ -170,6 +170,13 @@ export interface TypeReference {
   /** For union types */
   unionTypes?: TypeReference[];
 
+  /** For union types with OpenAPI discriminator */
+  discriminator?: {
+    propertyName: string;
+    /** Maps discriminator value → schema name. If absent, schema names are used as values. */
+    mapping?: Record<string, string>;
+  };
+
   /** For object/dictionary types with dynamic keys */
   additionalProperties?: TypeReference;
 }
@@ -361,10 +368,11 @@ export namespace IRHelpers {
     };
   }
 
-  export function createUnionType(types: TypeReference[]): TypeReference {
+  export function createUnionType(types: TypeReference[], discriminator?: { propertyName: string; mapping?: Record<string, string> }): TypeReference {
     return {
       kind: 'union',
       unionTypes: types,
+      discriminator,
     };
   }
 

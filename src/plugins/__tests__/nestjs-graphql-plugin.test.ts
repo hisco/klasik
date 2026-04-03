@@ -696,6 +696,205 @@ describe('NestJSGraphQLPlugin', () => {
     });
   });
 
+  describe('decorateProperty - union types with discriminator', () => {
+    it('should generate createUnionType for discriminated union', () => {
+      const sourceFile = project.createSourceFile('container.ts', 'export class Container {}');
+      const classDecl = sourceFile.getClass('Container')!;
+      const propertyDecl = classDecl.addProperty({ name: 'item', type: 'TypeA | TypeB' });
+
+      const schema = ImportedIRHelpers.createSchema('Container');
+      const unionType: TypeReference = {
+        kind: 'union',
+        unionTypes: [
+          { kind: 'reference', name: 'TypeA' },
+          { kind: 'reference', name: 'TypeB' },
+        ],
+        discriminator: {
+          propertyName: 'kind',
+          mapping: { a: 'TypeA', b: 'TypeB' },
+        },
+      };
+      const propertyDef = createPropertyWithOptions('item', unionType, { required: true });
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain('createUnionType');
+      expect(text).toContain("name: 'TypeAOrTypeB'");
+      expect(text).toContain('types: () => [TypeA, TypeB] as const');
+      expect(text).toContain("'a': TypeA");
+      expect(text).toContain("'b': TypeB");
+      expect(text).toContain('value.kind');
+
+      // Field should reference the union
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      expect(decorator!.getText()).toContain('TypeAOrTypeBUnion');
+    });
+
+    it('should generate createUnionType with inferred mapping when no explicit mapping', () => {
+      const sourceFile = project.createSourceFile('inferred.ts', 'export class Inferred {}');
+      const classDecl = sourceFile.getClass('Inferred')!;
+      const propertyDecl = classDecl.addProperty({ name: 'item', type: 'Alpha | Beta' });
+
+      const schema = ImportedIRHelpers.createSchema('Inferred');
+      const unionType: TypeReference = {
+        kind: 'union',
+        unionTypes: [
+          { kind: 'reference', name: 'Alpha' },
+          { kind: 'reference', name: 'Beta' },
+        ],
+        discriminator: {
+          propertyName: 'type',
+        },
+      };
+      const propertyDef = createPropertyWithOptions('item', unionType, { required: true });
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain("'Alpha': Alpha");
+      expect(text).toContain("'Beta': Beta");
+      expect(text).toContain('value.type');
+    });
+
+    it('should wrap discriminated union in array when property is array type', () => {
+      const sourceFile = project.createSourceFile('arr.ts', 'export class Arr {}');
+      const classDecl = sourceFile.getClass('Arr')!;
+      const propertyDecl = classDecl.addProperty({ name: 'items', type: 'Array<TypeA | TypeB>' });
+
+      const schema = ImportedIRHelpers.createSchema('Arr');
+      const arrayOfUnion: TypeReference = {
+        kind: 'array',
+        elementType: {
+          kind: 'union',
+          unionTypes: [
+            { kind: 'reference', name: 'TypeA' },
+            { kind: 'reference', name: 'TypeB' },
+          ],
+          discriminator: {
+            propertyName: 'itemType',
+            mapping: { a: 'TypeA', b: 'TypeB' },
+          },
+        },
+      };
+      const propertyDef = createPropertyWithOptions('items', arrayOfUnion, { required: true });
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      expect(decorator!.getText()).toContain('[TypeAOrTypeBUnion]');
+    });
+
+    it('should truncate union name for >3 members', () => {
+      const sourceFile = project.createSourceFile('many.ts', 'export class Many {}');
+      const classDecl = sourceFile.getClass('Many')!;
+      const propertyDecl = classDecl.addProperty({ name: 'item', type: 'A | B | C | D' });
+
+      const schema = ImportedIRHelpers.createSchema('Many');
+      const unionType: TypeReference = {
+        kind: 'union',
+        unionTypes: [
+          { kind: 'reference', name: 'A' },
+          { kind: 'reference', name: 'B' },
+          { kind: 'reference', name: 'C' },
+          { kind: 'reference', name: 'D' },
+        ],
+        discriminator: { propertyName: 'type' },
+      };
+      const propertyDef = createPropertyWithOptions('item', unionType, { required: true });
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      const text = sourceFile.getFullText();
+      expect(text).toContain("name: 'AOrBOrMore4'");
+      expect(text).toContain('AOrBOrMore4Union');
+    });
+  });
+
+  describe('decorateProperty - union types without discriminator', () => {
+    it('should fall back to GraphQLJSON for union without discriminator', () => {
+      const sourceFile = project.createSourceFile('nodiscrim.ts', 'export class NoDiscrim {}');
+      const classDecl = sourceFile.getClass('NoDiscrim')!;
+      const propertyDecl = classDecl.addProperty({ name: 'item', type: 'TypeA | TypeB' });
+
+      const schema = ImportedIRHelpers.createSchema('NoDiscrim');
+      const unionType: TypeReference = {
+        kind: 'union',
+        unionTypes: [
+          { kind: 'reference', name: 'TypeA' },
+          { kind: 'reference', name: 'TypeB' },
+        ],
+      };
+      const propertyDef = createPropertyWithOptions('item', unionType, { required: false });
+
+      // Capture console.warn
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+
+      // Should warn about fallback
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('NoDiscrim.item'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('GraphQLJSON'));
+      warnSpy.mockRestore();
+
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      expect(decorator!.getText()).toContain('GraphQLJSON');
+      expect(decorator!.getText()).toContain('nullable: true');
+    });
+
+    it('should fall back to [GraphQLJSON] for array of union without discriminator', () => {
+      const sourceFile = project.createSourceFile('arrnodiscrim.ts', 'export class ArrNoDiscrim {}');
+      const classDecl = sourceFile.getClass('ArrNoDiscrim')!;
+      const propertyDecl = classDecl.addProperty({ name: 'items', type: 'Array<TypeA | TypeB>' });
+
+      const schema = ImportedIRHelpers.createSchema('ArrNoDiscrim');
+      const arrayOfUnion: TypeReference = {
+        kind: 'array',
+        elementType: {
+          kind: 'union',
+          unionTypes: [
+            { kind: 'reference', name: 'TypeA' },
+            { kind: 'reference', name: 'TypeB' },
+          ],
+        },
+      };
+      const propertyDef = createPropertyWithOptions('items', arrayOfUnion, { required: true });
+
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+      jest.restoreAllMocks();
+
+      const decorator = propertyDecl.getDecorator('Field');
+      expect(decorator).toBeDefined();
+      expect(decorator!.getText()).toContain('[GraphQLJSON]');
+    });
+
+    it('should add graphql-scalars import for GraphQLJSON fallback', () => {
+      const sourceFile = project.createSourceFile('importtest.ts', 'export class ImportTest {}');
+      const classDecl = sourceFile.getClass('ImportTest')!;
+      const propertyDecl = classDecl.addProperty({ name: 'item', type: 'TypeA | TypeB' });
+
+      const schema = ImportedIRHelpers.createSchema('ImportTest');
+      const unionType: TypeReference = {
+        kind: 'union',
+        unionTypes: [
+          { kind: 'reference', name: 'TypeA' },
+          { kind: 'reference', name: 'TypeB' },
+        ],
+      };
+      const propertyDef = createPropertyWithOptions('item', unionType, { required: true });
+
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      plugin.decorateProperty(propertyDecl, propertyDef, schema, context);
+      jest.restoreAllMocks();
+
+      expect(importManager.hasImport('graphql-scalars')).toBe(true);
+    });
+  });
+
   describe('modifyPackageJson', () => {
     it('should add @nestjs/graphql to existing dependencies', () => {
       const packageJson: any = {

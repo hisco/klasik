@@ -412,7 +412,21 @@ export class OpenAPIParser {
     // Handle oneOf/anyOf as union
     if (schema.oneOf || schema.anyOf) {
       const types = (schema.oneOf || schema.anyOf || []).map(s => this.parseType(s));
-      return IRHelpers.createUnionType(types);
+      let discriminator: { propertyName: string; mapping?: Record<string, string> } | undefined;
+      if (schema.discriminator?.propertyName) {
+        discriminator = { propertyName: schema.discriminator.propertyName };
+        if (schema.discriminator.mapping) {
+          // Convert $ref values to schema names
+          const mapping: Record<string, string> = {};
+          for (const [key, value] of Object.entries(schema.discriminator.mapping as Record<string, string>)) {
+            mapping[key] = value.includes('/')
+              ? this.extractRefName(value)
+              : value;
+          }
+          discriminator.mapping = mapping;
+        }
+      }
+      return IRHelpers.createUnionType(types, discriminator);
     }
 
     // Handle array

@@ -668,4 +668,131 @@ console.log(JSON.stringify(result, null, 2));
     const integerContent = fs.readFileSync(path.join(SCALAR_MODELS_DIR, 'integer.ts'), 'utf-8');
     expect(integerContent).toContain('export class Integer');
   });
+
+  it('should generate createUnionType for discriminated union and GraphQLJSON fallback for non-discriminated', async () => {
+    const TEST_UNION_DIR = path.join(__dirname, '../../test-output/e2e-nestjs-graphql-unions');
+    const UNION_MODELS_DIR = path.join(TEST_UNION_DIR, 'models');
+    await ensureCleanDirectory(TEST_UNION_DIR);
+
+    const unionSpec = {
+      openapi: '3.0.0',
+      info: { title: 'Union Test API', version: '1.0.0' },
+      paths: {},
+      components: {
+        schemas: {
+          TextBlock: {
+            type: 'object',
+            required: ['blockType', 'text'],
+            properties: {
+              blockType: { type: 'string' },
+              text: { type: 'string' },
+            },
+          },
+          ImageBlock: {
+            type: 'object',
+            required: ['blockType', 'url'],
+            properties: {
+              blockType: { type: 'string' },
+              url: { type: 'string', format: 'uri' },
+            },
+          },
+          Widget: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+              id: { type: 'string' },
+              label: { type: 'string' },
+            },
+          },
+          Gadget: {
+            type: 'object',
+            required: ['id'],
+            properties: {
+              id: { type: 'string' },
+              power: { type: 'number' },
+            },
+          },
+          Page: {
+            type: 'object',
+            required: ['title', 'blocks'],
+            properties: {
+              title: { type: 'string' },
+              blocks: {
+                type: 'array',
+                items: {
+                  oneOf: [
+                    { $ref: '#/components/schemas/TextBlock' },
+                    { $ref: '#/components/schemas/ImageBlock' },
+                  ],
+                  discriminator: {
+                    propertyName: 'blockType',
+                    mapping: {
+                      text: '#/components/schemas/TextBlock',
+                      image: '#/components/schemas/ImageBlock',
+                    },
+                  },
+                },
+              },
+              mainBlock: {
+                oneOf: [
+                  { $ref: '#/components/schemas/TextBlock' },
+                  { $ref: '#/components/schemas/ImageBlock' },
+                ],
+                discriminator: {
+                  propertyName: 'blockType',
+                  mapping: {
+                    text: '#/components/schemas/TextBlock',
+                    image: '#/components/schemas/ImageBlock',
+                  },
+                },
+              },
+              attachment: {
+                oneOf: [
+                  { $ref: '#/components/schemas/Widget' },
+                  { $ref: '#/components/schemas/Gadget' },
+                ],
+                description: 'An attached item without discriminator',
+              },
+            },
+          },
+        },
+      },
+    };
+
+    const parser = new OpenAPIParser();
+    const ir = parser.parse(unionSpec, { includeOperations: false });
+
+    const generator = new Generator({
+      outputDir: TEST_UNION_DIR,
+      nestJsGraphql: true,
+      esm: false,
+      mode: 'models-only',
+    });
+    await generator.generate(ir);
+
+    const pageFile = path.join(UNION_MODELS_DIR, 'page.ts');
+    expect(fs.existsSync(pageFile)).toBe(true);
+    const pageContent = fs.readFileSync(pageFile, 'utf-8');
+
+    // Discriminated union: should have createUnionType
+    expect(pageContent).toContain('createUnionType');
+    expect(pageContent).toContain("name: 'TextBlockOrImageBlock'");
+    expect(pageContent).toContain('types: () => [TextBlock, ImageBlock] as const');
+    expect(pageContent).toContain("'text': TextBlock");
+    expect(pageContent).toContain("'image': ImageBlock");
+    expect(pageContent).toContain('value.blockType');
+
+    // Array of discriminated union
+    expect(pageContent).toContain('[TextBlockOrImageBlockUnion]');
+    // Singular discriminated union
+    expect(pageContent).toMatch(/\(\) => TextBlockOrImageBlockUnion[,\s]/);
+
+    // Non-discriminated union: should fall back to GraphQLJSON
+    expect(pageContent).toContain('GraphQLJSON');
+    expect(pageContent).toContain('from "graphql-scalars"');
+
+    // All fields should have @Field — nothing silently dropped
+    const fieldCount = (pageContent.match(/@Field\(/g) || []).length;
+    expect(fieldCount).toBe(4); // title, blocks, mainBlock, attachment
+  });
 });

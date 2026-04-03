@@ -23,6 +23,9 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
   name = 'nestjs-graphql';
   priority = 100;
 
+  /** Track generated union type names per source file to avoid duplicates */
+  private generatedUnionsByFile = new Map<string, Set<string>>();
+
   /**
    * Add @nestjs/graphql imports and auto-rename schemas that conflict with
    * GraphQL built-in scalar types (Boolean, Int, Float, String, ID).
@@ -69,9 +72,14 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
     schema: SchemaDefinition,
     context: GenerationContext
   ): void {
+    // Check for union types that need special handling
+    const unionResult = this.handleUnionFieldType(property, propertyDef, schema, context);
+    if (unionResult) {
+      return; // Union was handled (either createUnionType or GraphQLJSON fallback)
+    }
+
     const fieldType = this.getGraphQLFieldType(propertyDef.type, propertyDef.format);
     if (!fieldType) {
-      // Skip types that can't be represented in GraphQL (dictionary, union, unknown)
       return;
     }
 
@@ -105,6 +113,134 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
     optionsStr += ' }';
 
     sourceFile.addStatements(`\nregisterEnumType(${schema.name}, ${optionsStr});`);
+  }
+
+  /**
+   * Handle union type fields — returns true if the union was handled
+   */
+  private handleUnionFieldType(
+    property: PropertyDeclaration,
+    propertyDef: PropertyDefinition,
+    schema: SchemaDefinition,
+    context: GenerationContext
+  ): boolean {
+    // Unwrap array to find union inside
+    const type = propertyDef.type;
+    const isArray = type.kind === 'array';
+    const innerType = isArray ? type.elementType : type;
+
+    if (!innerType || innerType.kind !== 'union' || !innerType.unionTypes || innerType.unionTypes.length === 0) {
+      return false;
+    }
+
+    // Get member names — only handle unions of references
+    const memberNames = innerType.unionTypes
+      .map(t => t.name)
+      .filter((n): n is string => !!n);
+
+    if (memberNames.length === 0) {
+      return false;
+    }
+
+    const sourceFile = property.getSourceFile();
+
+    if (innerType.discriminator?.propertyName) {
+      // Strategy 1: Discriminated union → createUnionType
+      const unionName = this.buildUnionName(memberNames);
+      const unionVarName = unionName + 'Union';
+
+      const filePath = sourceFile.getFilePath();
+      if (!this.generatedUnionsByFile.has(filePath)) {
+        this.generatedUnionsByFile.set(filePath, new Set());
+      }
+      const fileUnions = this.generatedUnionsByFile.get(filePath)!;
+
+      if (!fileUnions.has(unionVarName)) {
+        fileUnions.add(unionVarName);
+
+        context.importManager.addImport('@nestjs/graphql', 'createUnionType');
+
+        // Build resolveType mapping
+        const disc = innerType.discriminator;
+        const mappingEntries: string[] = [];
+        if (disc.mapping) {
+          for (const [key, schemaName] of Object.entries(disc.mapping)) {
+            mappingEntries.push(`    '${key}': ${schemaName}`);
+          }
+        } else {
+          // No explicit mapping — use schema names as discriminator values (per OpenAPI spec)
+          for (const name of memberNames) {
+            mappingEntries.push(`    '${name}': ${name}`);
+          }
+        }
+
+        const unionDecl = `\nexport const ${unionVarName} = createUnionType({
+  name: '${unionName}',
+  types: () => [${memberNames.join(', ')}] as const,
+  resolveType: (value: any) => {
+    const typeMap: Record<string, Function> = {
+${mappingEntries.join(',\n')}
+    };
+    return typeMap[value.${disc.propertyName}] ?? null;
+  },
+});\n`;
+
+        sourceFile.addStatements(unionDecl);
+      }
+
+      // Add @Field with union type
+      const fieldType = isArray ? `[${unionVarName}]` : unionVarName;
+      const options = this.buildFieldOptions(propertyDef);
+      const optionsStr = options ? `, ${this.buildOptionsString(options)}` : '';
+      property.addDecorator({
+        name: 'Field',
+        arguments: [`() => ${fieldType}${optionsStr}`],
+      });
+    } else {
+      // Strategy 2: No discriminator → GraphQLJSON fallback + warning
+      const memberStr = memberNames.join(', ');
+      console.warn(
+        `⚠ ${schema.name}.${propertyDef.name}: oneOf/anyOf without discriminator — falling back to GraphQLJSON.\n` +
+        `  Tip: add a discriminator to your OpenAPI spec for a fully typed GraphQL union.`
+      );
+
+      context.importManager.addImport('graphql-scalars', 'GraphQLJSON');
+
+      const fieldType = isArray ? '[GraphQLJSON]' : 'GraphQLJSON';
+
+      // Add description hint about the union members
+      const options = this.buildFieldOptions(propertyDef);
+      if (!options) {
+        const descHint = `Union type — see ${memberStr}`;
+        property.addDecorator({
+          name: 'Field',
+          arguments: [`() => ${fieldType}, { description: \`${this.escapeForTemplate(descHint)}\` }`],
+        });
+      } else {
+        if (!options.description) {
+          options.description = this.escapeForTemplate(`Union type — see ${memberStr}`);
+        }
+        const optionsStr = this.buildOptionsString(options);
+        property.addDecorator({
+          name: 'Field',
+          arguments: [`() => ${fieldType}, ${optionsStr}`],
+        });
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Build a union type name from member names.
+   * ≤3 members: TypeAOrTypeB or TypeAOrTypeBOrTypeC
+   * >3 members: TypeAOrTypeBOrMore3Union
+   */
+  private buildUnionName(memberNames: string[]): string {
+    if (memberNames.length <= 3) {
+      return memberNames.join('Or');
+    }
+    return `${memberNames[0]}Or${memberNames[1]}OrMore${memberNames.length}`;
   }
 
   /**
@@ -336,6 +472,13 @@ export class NestJSGraphQLPlugin implements GeneratorPlugin {
       for (const t of type.unionTypes) {
         this.updateTypeRefs(t, renames);
       }
+    }
+    if (type.discriminator?.mapping) {
+      const updatedMapping: Record<string, string> = {};
+      for (const [key, value] of Object.entries(type.discriminator.mapping)) {
+        updatedMapping[key] = renames.get(value) || value;
+      }
+      type.discriminator.mapping = updatedMapping;
     }
     if (type.additionalProperties) {
       this.updateTypeRefs(type.additionalProperties, renames);

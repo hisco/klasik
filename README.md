@@ -1799,8 +1799,13 @@ The `--nestjs-graphql` flag maps OpenAPI types to GraphQL scalars:
 | `boolean` | `Boolean` |
 | `array` | `[ElementType]` |
 | `$ref` | Referenced class name |
+| `object` (untyped) / `additionalProperties` | `GraphQLJSON` (from `graphql-scalars`) |
+| `oneOf`/`anyOf` with `discriminator` | `createUnionType()` with `resolveType` |
+| `oneOf`/`anyOf` without `discriminator` | `GraphQLJSON` (with CLI warning) |
 
-Dictionary types (`additionalProperties`) and unions are skipped as they have no direct GraphQL representation. Deprecated fields automatically get `deprecationReason: "Deprecated"`.
+Deprecated fields automatically get `deprecationReason: "Deprecated"`.
+
+**Union types:** When a property uses `oneOf`/`anyOf` with an OpenAPI `discriminator`, klasik generates a proper GraphQL union type using `createUnionType()` with a spec-driven `resolveType` function. Without a discriminator, the field falls back to `GraphQLJSON` and a warning is emitted suggesting you add a discriminator for full type safety.
 
 ## Advanced Topics
 
