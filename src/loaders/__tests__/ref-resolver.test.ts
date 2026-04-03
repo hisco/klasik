@@ -354,6 +354,49 @@ describe('RefResolver', () => {
       expect(result.size).toBeGreaterThan(0);
     });
 
+    it('should store content under both ref keys when same file is referenced from different paths', async () => {
+      // Main spec has refs to Pet.yaml AND Owner.yaml via different relative paths
+      // Pet.yaml also refs Owner.yaml via a different relative path
+      // Both refs resolve to the same URL, but have different original ref strings
+      const spec = {
+        schemas: {
+          pet: { $ref: './schemas/Pet.yaml' },
+          owner: { $ref: './schemas/Owner.yaml' },
+        },
+      };
+
+      const petSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          owner: { $ref: './Owner.yaml' },  // relative to schemas/
+        },
+      };
+
+      const ownerSchema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+        },
+      };
+
+      mockLoader.load = jest.fn().mockImplementation((opts: any) => {
+        if (opts.url.endsWith('/schemas/Pet.yaml')) return Promise.resolve(petSchema);
+        if (opts.url.endsWith('/schemas/Owner.yaml')) return Promise.resolve(ownerSchema);
+        return Promise.reject(new Error(`Not found: ${opts.url}`));
+      });
+
+      const result = await resolver.resolveExternalRefs(spec, {
+        baseUrl: '/project/openapi.yaml',
+      });
+
+      // Both the main spec's ref AND the nested ref should be stored
+      expect(result.get('./schemas/Pet.yaml')).toEqual(petSchema);
+      expect(result.get('./schemas/Owner.yaml')).toEqual(ownerSchema);
+      // The nested ref from Pet.yaml (different relative path, same resolved URL)
+      expect(result.get('./Owner.yaml')).toEqual(ownerSchema);
+    });
+
     it('should throw error if ref download fails', async () => {
       const spec = {
         schema: {

@@ -38,11 +38,13 @@ export class RefResolver {
   private specLoader: SpecLoader;
   private resolvedRefs: Map<string, any>;
   private visitedUrls: Set<string>;
+  private resolvedUrlToContent: Map<string, any>;
 
   constructor() {
     this.specLoader = new SpecLoader();
     this.resolvedRefs = new Map();
     this.visitedUrls = new Set();
+    this.resolvedUrlToContent = new Map();
   }
 
   /**
@@ -60,6 +62,7 @@ export class RefResolver {
     // Reset state
     this.resolvedRefs = new Map();
     this.visitedUrls = new Set();
+    this.resolvedUrlToContent = new Map();
 
     // Find all external refs
     const externalRefs = this.findExternalRefs(spec);
@@ -175,8 +178,12 @@ export class RefResolver {
     // Resolve to absolute URL
     const resolvedUrl = this.resolveRefUrl(ref, baseUrl, isRemote);
 
-    // Skip if already visited
+    // Skip if already visited — but still store under this ref key
     if (this.visitedUrls.has(resolvedUrl)) {
+      const existingContent = this.resolvedUrlToContent.get(resolvedUrl);
+      if (existingContent && !this.resolvedRefs.has(ref)) {
+        this.resolvedRefs.set(ref, existingContent);
+      }
       return;
     }
     this.visitedUrls.add(resolvedUrl);
@@ -188,8 +195,9 @@ export class RefResolver {
         ...options.loaderOptions,
       });
 
-      // Store resolved content
+      // Store resolved content (by original ref and by resolved URL)
       this.resolvedRefs.set(ref, content);
+      this.resolvedUrlToContent.set(resolvedUrl, content);
 
       // Find nested external refs in this file
       const nestedRefs = this.findExternalRefs(content);
@@ -267,5 +275,6 @@ export class RefResolver {
   clear(): void {
     this.resolvedRefs.clear();
     this.visitedUrls.clear();
+    this.resolvedUrlToContent.clear();
   }
 }
