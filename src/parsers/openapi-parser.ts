@@ -32,6 +32,7 @@ export interface OpenAPISpec {
   paths?: Record<string, PathItem>;
   components?: {
     schemas?: Record<string, SchemaObject>;
+    parameters?: Record<string, ParameterObject>;
     securitySchemes?: Record<string, any>;
   };
 }
@@ -583,14 +584,29 @@ export class OpenAPIParser {
    * Parse parameter
    */
   private parseParameter(param: ParameterObject): ParameterDefinition {
+    // Resolve $ref parameters by looking up in components/parameters
+    const resolved = (param as any).$ref ? this.resolveParameterRef((param as any).$ref) : param;
     return {
-      name: param.name,
-      in: param.in,
-      description: param.description,
-      required: param.required || param.in === 'path',
-      type: param.schema ? this.parseType(param.schema) : IRHelpers.createUnknownType(),
-      example: param.example,
+      name: resolved.name,
+      in: resolved.in,
+      description: resolved.description,
+      required: resolved.required || resolved.in === 'path',
+      type: resolved.schema ? this.parseType(resolved.schema) : IRHelpers.createUnknownType(),
+      example: resolved.example,
     };
+  }
+
+  /**
+   * Resolve a $ref to a parameter object
+   */
+  private resolveParameterRef(ref: string): ParameterObject {
+    // Navigate the spec to resolve the $ref path (e.g. #/components/parameters/orgId)
+    const parts = ref.replace(/^#\//, '').split('/');
+    let current: any = this.spec;
+    for (const part of parts) {
+      current = current?.[part];
+    }
+    return current || { name: this.extractRefName(ref), in: 'query' as const };
   }
 
   /**

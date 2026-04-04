@@ -718,6 +718,63 @@ describe('OpenAPIParser', () => {
     });
   });
 
+  describe('$ref parameter resolution', () => {
+    it('should resolve $ref parameters from components/parameters', () => {
+      const spec: OpenAPISpec = {
+        openapi: '3.0.0',
+        info: { title: 'Test', version: '1.0.0' },
+        components: {
+          schemas: {},
+          parameters: {
+            orgId: {
+              name: 'orgId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Organization ID',
+            },
+            limit: {
+              name: 'limit',
+              in: 'query',
+              required: false,
+              schema: { type: 'integer' },
+            },
+          },
+        },
+        paths: {
+          '/orgs/{orgId}/items': {
+            get: {
+              operationId: 'getItems',
+              tags: ['orgs'],
+              parameters: [
+                { $ref: '#/components/parameters/orgId' } as any,
+                { $ref: '#/components/parameters/limit' } as any,
+              ],
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+
+      const ir = parser.parse(spec, { includeOperations: true });
+      const op = ir.operations.get('getItems')!;
+
+      expect(op.parameters).toHaveLength(2);
+
+      expect(op.parameters[0].name).toBe('orgId');
+      expect(op.parameters[0].in).toBe('path');
+      expect(op.parameters[0].required).toBe(true);
+      expect(op.parameters[0].type.kind).toBe('primitive');
+      expect(op.parameters[0].type.name).toBe('string');
+
+      expect(op.parameters[1].name).toBe('limit');
+      expect(op.parameters[1].in).toBe('query');
+      expect(op.parameters[1].required).toBe(false);
+      expect(op.parameters[1].type.kind).toBe('primitive');
+      expect(op.parameters[1].type.name).toBe('number');
+    });
+  });
+
   describe('edge cases and error handling', () => {
     it('should handle schema without type field', () => {
       const spec: OpenAPISpec = {
