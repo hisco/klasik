@@ -633,8 +633,13 @@ export class ApiClientGenerator {
     }
 
     // Check if primitive (kind is 'primitive' for string, number, boolean, etc.)
+    // Also treat 'unknown', 'dictionary', and unnamed object/reference types as primitive
+    // since they resolve to 'any' which cannot be used as a class in plainToInstance()
     const isPrimitive = baseTypeRef.kind === 'primitive' ||
+                       baseTypeRef.kind === 'unknown' ||
+                       baseTypeRef.kind === 'dictionary' ||
                        (baseTypeRef.kind === 'reference' && !baseTypeRef.name) ||
+                       (baseTypeRef.kind === 'object' && !baseTypeRef.name) ||
                        (baseTypeRef.name === 'string' || baseTypeRef.name === 'number' ||
                         baseTypeRef.name === 'boolean' || baseTypeRef.name === 'any');
 
@@ -647,7 +652,7 @@ export class ApiClientGenerator {
     return {
       hasResponse: true,
       isArray,
-      isPrimitive,
+      isPrimitive: isPrimitive || baseType === 'any',
       baseType,
       fullType,
     };

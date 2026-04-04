@@ -520,6 +520,182 @@ describe('ApiClientGenerator', () => {
     });
   });
 
+  describe('untyped response types', () => {
+    it('should not generate plainToInstance for unknown/any response types', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getData',
+        method: 'GET',
+        path: '/data',
+        parameters: [],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              description: 'OK',
+              content: new Map([
+                ['application/json', IRHelpers.createUnknownType()],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['data'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getData', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'data-api.ts'),
+        'utf-8'
+      );
+
+      // Should NOT use plainToInstance(any, ...) — 'any' is a type, not a value
+      expect(apiContent).not.toContain('plainToInstance(any');
+      // Should return directly without transformation
+      expect(apiContent).toContain('this.axios.request(localVarRequestOptions)');
+    });
+
+    it('should not generate plainToInstance for unnamed object response types', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getConfig',
+        method: 'GET',
+        path: '/config',
+        parameters: [],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              description: 'OK',
+              content: new Map([
+                ['application/json', { kind: 'object' as const }],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['config'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getConfig', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'config-api.ts'),
+        'utf-8'
+      );
+
+      // Should NOT use plainToInstance(any, ...) for unnamed object types
+      expect(apiContent).not.toContain('plainToInstance(any');
+    });
+
+    it('should not generate plainToInstance for dictionary response types', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'getMetadata',
+        method: 'GET',
+        path: '/metadata',
+        parameters: [],
+        responses: new Map([
+          [
+            '200',
+            {
+              statusCode: '200',
+              description: 'OK',
+              content: new Map([
+                ['application/json', IRHelpers.createDictionaryType(IRHelpers.createPrimitiveType('string'))],
+              ]),
+            },
+          ],
+        ]),
+        tags: ['meta'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['getMetadata', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'meta-api.ts'),
+        'utf-8'
+      );
+
+      // Dictionary types resolve to { [key: string]: ... }, not a class — should not call plainToInstance()
+      expect(apiContent).not.toMatch(/plainToInstance\([^)]/);  // Match actual calls, not just the import
+    });
+
+    it('should handle response with no content block as void', async () => {
+      const operation: OperationDefinition = {
+        operationId: 'registerService',
+        method: 'POST',
+        path: '/register',
+        parameters: [],
+        responses: new Map([
+          [
+            '201',
+            {
+              statusCode: '201',
+              description: 'Successful operation',
+              // No content block
+            },
+          ],
+        ]),
+        tags: ['service'],
+      };
+
+      const ir: SchemaIR = {
+        schemas: new Map(),
+        operations: new Map([['registerService', operation]]),
+        metadata: { sourceFormat: 'openapi' },
+      };
+
+      const generator = new ApiClientGenerator({
+        outputDir: tempDir,
+        esm: false,
+      });
+
+      await generator.generateFullClient(ir);
+
+      const apiContent = fs.readFileSync(
+        path.join(tempDir, 'apis', 'service-api.ts'),
+        'utf-8'
+      );
+
+      // Should treat as void return type
+      expect(apiContent).toContain('Promise<AxiosResponse<void>>');
+      // Should NOT call plainToInstance() (import is always present but unused here)
+      expect(apiContent).not.toMatch(/plainToInstance\([^)]/);  // Match actual calls, not just the import
+    });
+  });
+
   describe('union response types', () => {
     const unionOperation: OperationDefinition = {
       operationId: 'getConfig',
