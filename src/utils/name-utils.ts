@@ -9,6 +9,7 @@
  * Example: "AppProject" -> "app-project"
  */
 export function toKebabCase(str: string): string {
+  if (!str) return str || '';
   return str
     .replace(/\s+/g, '-')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
@@ -21,6 +22,7 @@ export function toKebabCase(str: string): string {
  * Example: "AppProject" -> "app_project"
  */
 export function toSnakeCase(str: string): string {
+  if (!str) return str || '';
   return str
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
@@ -32,28 +34,25 @@ export function toSnakeCase(str: string): string {
  * Example: "app-project" -> "AppProject", "AppProject" -> "AppProject"
  */
 export function toPascalCase(str: string): string {
+  if (!str) return str || '';
   // If the string contains hyphens, underscores, or spaces, split on them
   if (str.includes('-') || str.includes('_') || str.includes(' ')) {
     return str
       .split(/[-_\s]+/)
       .filter(word => word.length > 0)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .map(word => {
+        // All-uppercase segments (e.g. "USER", "HTTP") get title-cased
+        if (word === word.toUpperCase() && word.length > 1) {
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        }
+        // Otherwise preserve internal casing, just ensure first char is uppercase
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      })
       .join('');
   }
 
-  // Otherwise, check if it's already PascalCase or camelCase
-  // Split on case transitions (e.g., "AppProject" -> ["App", "Project"])
-  const words = str.split(/(?=[A-Z])/).filter(word => word.length > 0);
-
-  // If we found multiple words (PascalCase/camelCase), preserve them
-  if (words.length > 1) {
-    return words
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join('');
-  }
-
-  // Single word: just capitalize first letter
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  // Otherwise, preserve existing casing — just ensure first char is uppercase
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 /**

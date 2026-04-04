@@ -175,7 +175,7 @@ describe('name-utils', () => {
 
     it('should handle mixed case input', () => {
       expect(toPascalCase('User-Profile')).toBe('UserProfile');
-      expect(toPascalCase('myApp-Config')).toBe('MyappConfig');
+      expect(toPascalCase('myApp-Config')).toBe('MyAppConfig');
     });
 
     it('should convert strings with spaces to PascalCase', () => {
